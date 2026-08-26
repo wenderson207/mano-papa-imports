@@ -1,0 +1,512 @@
+<style>
+  .modal-overlay{ position:fixed; inset:0; background:rgba(3,5,8,0.6); display:none; align-items:center; justify-content:center; z-index:100; padding:24px; }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:14px; width:100%; max-width:640px; max-height:90vh; overflow-y:auto; }
+  .modal-head{ display:flex; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--hairline); position:sticky; top:0; background:var(--bg-surface); }
+  .modal-body{ padding:20px 22px; }
+  .modal-foot{ display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--hairline); flex-wrap:wrap; }
+  .ffield{ margin-bottom:14px; }
+  .ffield label{ display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px; }
+  .ffield input, .ffield select, .ffield textarea{ width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; font-family:inherit; box-sizing:border-box; }
+  .frow2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .modal-close{ background:none; border:none; color:var(--text-tertiary); font-size:18px; cursor:pointer; }
+  .section-title{ font-family:var(--font-display); font-size:13px; font-weight:600; margin:18px 0 10px; padding-top:12px; border-top:1px solid var(--hairline); }
+  .section-title:first-child{ border-top:none; padding-top:0; margin-top:0; }
+  .tabela-itens{ width:100%; border-collapse:collapse; }
+  .tabela-itens th{ text-align:left; font-size:10.5px; color:var(--text-tertiary); font-family:var(--font-mono); text-transform:uppercase; padding:0 6px 6px 0; }
+  .tabela-itens td{ padding:4px 6px 4px 0; }
+  .tabela-itens input{ width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:8px 10px; border-radius:6px; font-size:12.5px; font-family:inherit; box-sizing:border-box; }
+  .tabela-itens tfoot td{ padding-top:10px; border-top:1px solid var(--hairline); font-size:12.5px; }
+  .badge{ display:inline-flex; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600; font-family:var(--font-mono); }
+  .badge.info{ background:rgba(76,141,255,0.12); color:var(--blue); }
+  .badge.ok{ background:rgba(47,225,168,0.12); color:var(--mint); }
+  .badge.danger{ background:rgba(255,92,92,0.12); color:var(--red); }
+  .badge.neutral{ background:var(--bg-elevated); color:var(--text-secondary); }
+</style>
+
+<div class="toolbar">
+  <div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Orçamentos</h1>
+  <p style="color:var(--text-secondary); font-size:13px; margin:0;">Cliente não precisa estar cadastrado — o nome digitado aqui não vira cadastro.</p></div>
+  <button class="btn btn-primary" id="btnNovo">+ Novo orçamento</button>
+</div>
+
+<table class="dt">
+  <thead><tr><th>Nº</th><th>Cliente</th><th>Aparelho</th><th>Data</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+  <tbody id="linhas"><tr class="empty-row"><td colspan="7">Carregando…</td></tr></tbody>
+</table>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="modalTitulo" style="font-family:var(--font-display); margin:0;">Novo orçamento</h3><button class="modal-close" id="fecharModal">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="fId">
+      <div class="section-title">Cliente</div>
+      <div class="frow2">
+        <div class="ffield"><label>Nome do cliente *</label><input id="fClienteNome" placeholder="Não precisa estar cadastrado"></div>
+        <div class="ffield"><label>Telefone</label><input id="fClienteTelefone" placeholder="(11) 90000-0000"></div>
+      </div>
+
+      <div class="section-title">Aparelho e problema</div>
+      <div class="ffield"><label>Aparelho (marca/modelo)</label><input id="fAparelho" placeholder="Ex.: Samsung A23"></div>
+      <div class="ffield"><label>Problema relatado</label><textarea id="fProblema" placeholder="Descreva o problema informado pelo cliente"></textarea></div>
+
+      <div class="section-title">Peças / serviços do orçamento</div>
+      <table class="tabela-itens">
+        <thead><tr><th>Item</th><th style="width:130px;">Preço (R$)</th></tr></thead>
+        <tbody id="linhasItens"></tbody>
+      </table>
+
+      <div class="frow2" style="margin-top:14px;">
+        <div class="ffield"><label>Desconto (R$)</label><input id="fDesconto" type="number" step="0.01" value="0"></div>
+        <div class="ffield"><label>Validade do orçamento (dias)</label><input id="fValidade" type="number" value="15"></div>
+      </div>
+      <div class="ffield">
+        <label>Valor Total do orçamento (R$) — editável</label>
+        <div style="display:flex; gap:8px;">
+          <input id="fValorTotal" type="number" step="0.01" value="0" style="flex:1;">
+          <button class="btn" id="btnRecalcularTotal" type="button" style="white-space:nowrap;">🔄 Somar peças</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="btnCancelar">Fechar</button>
+      <button class="btn" id="btnSalvar">Salvar</button>
+      <button class="btn" id="btnEnviarWpp">🖼️ Enviar imagem no WhatsApp</button>
+      <button class="btn" id="btnImprimirOrcamento">🖨️ Imprimir</button>
+      <button class="btn btn-primary" id="btnSalvarPdf">⬇️ Salvar PDF</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(async function(){
+  let itens = [], empresas = [];
+  let orcamentoAtual = null;
+
+  function moeda(v){ return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
+  function dataBR(v){ return v ? parseDataLocal(v).toLocaleDateString('pt-BR') : '—'; }
+  function badge(s){ const map = { Aberto:'info', Aprovado:'ok', Recusado:'danger', Expirado:'neutral' };
+    return '<span class="badge ' + (map[s]||'neutral') + '">' + s + '</span>'; }
+
+  async function carregar(){
+    try {
+      if (!(await checarPermissao('ORCAMENTOS','VISUALIZAR'))){ setHTML('linhas', '<tr class="empty-row"><td colspan="7">Sem permissão.</td></tr>'); return; }
+      empresas = await dbGetAll('EMPRESAS');
+      let todos = await dbGetAll('ORCAMENTOS');
+      if (window.lojaAtivaId) todos = todos.filter(o => o.EMPRESA_ID === window.lojaAtivaId);
+      itens = todos.sort((a,b) => new Date(b.DATA) - new Date(a.DATA));
+      renderLinhas();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  }
+
+  function renderLinhas(){
+    if (!itens.length){ setHTML('linhas', '<tr class="empty-row"><td colspan="7">Nenhum orçamento ainda.</td></tr>'); return; }
+    setHTML('linhas', itens.map(o => `<tr>
+      <td class="mono">${o.NUMERO_ORCAMENTO||'—'}</td><td>${o.CLIENTE_NOME||'—'}</td><td>${o.APARELHO||'—'}</td>
+      <td>${dataBR(o.DATA)}</td><td>${moeda(o.VALOR_TOTAL)}</td><td>${badge(o.STATUS)}</td>
+      <td style="display:flex; gap:6px;">
+        <button class="btn" style="padding:6px 10px; font-size:11.5px;" onclick="window.__abrirOrcamento('${o.ID}')">Ver/Editar</button>
+        <button class="btn" style="padding:6px 10px; font-size:11.5px; color:var(--red);" onclick="window.__excluirOrcamento('${o.ID}')">Excluir</button>
+      </td></tr>`).join(''));
+  }
+
+  function gerarLinhasItens(itensExistentes){
+    const tbody = document.getElementById('linhasItens');
+    const listaItens = itensExistentes && itensExistentes.length ? itensExistentes : [];
+    const totalLinhas = Math.max(5, listaItens.length);
+    let html = '';
+    for (let i = 0; i < totalLinhas; i++){
+      const it = listaItens[i] || { item:'', preco:'' };
+      html += `<tr><td><input class="input-item" value="${it.item||''}" placeholder="Ex.: Troca de tela"></td><td><input class="input-preco-item" type="number" step="0.01" value="${it.preco||''}"></td></tr>`;
+    }
+    tbody.innerHTML = html;
+    tbody.querySelectorAll('.input-preco-item').forEach(inp => inp.addEventListener('input', () => {}));
+  }
+  document.getElementById('btnRecalcularTotal').addEventListener('click', () => {
+    const soma = coletarItens().reduce((s,i) => s + i.preco, 0);
+    const desconto = Number(document.getElementById('fDesconto').value) || 0;
+    document.getElementById('fValorTotal').value = Math.max(soma - desconto, 0).toFixed(2);
+  });
+
+  function coletarItens(){
+    return [...document.querySelectorAll('#linhasItens tr')].map(l => ({
+      item: l.querySelector('.input-item').value.trim(),
+      preco: Number(l.querySelector('.input-preco-item').value) || 0
+    })).filter(i => i.item || i.preco);
+  }
+
+
+  const modal = document.getElementById('modal');
+  document.getElementById('btnNovo').addEventListener('click', () => {
+    orcamentoAtual = null;
+    document.getElementById('modalTitulo').textContent = 'Novo orçamento';
+    document.getElementById('fId').value = '';
+    ['fClienteNome','fClienteTelefone','fAparelho','fProblema'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('fDesconto').value = 0;
+    document.getElementById('fValidade').value = 15;
+    document.getElementById('fValorTotal').value = 0;
+    gerarLinhasItens([]);
+    modal.classList.add('open');
+  });
+  document.getElementById('fecharModal').addEventListener('click', () => modal.classList.remove('open'));
+  document.getElementById('btnCancelar').addEventListener('click', () => modal.classList.remove('open'));
+
+  window.__abrirOrcamento = (id) => {
+    orcamentoAtual = itens.find(o => o.ID === id);
+    if (!orcamentoAtual) return;
+    document.getElementById('modalTitulo').textContent = 'Orçamento ' + (orcamentoAtual.NUMERO_ORCAMENTO||'');
+    document.getElementById('fId').value = orcamentoAtual.ID;
+    document.getElementById('fClienteNome').value = orcamentoAtual.CLIENTE_NOME||'';
+    document.getElementById('fClienteTelefone').value = orcamentoAtual.CLIENTE_TELEFONE||'';
+    document.getElementById('fAparelho').value = orcamentoAtual.APARELHO||'';
+    document.getElementById('fProblema').value = orcamentoAtual.PROBLEMA_RELATADO||'';
+    document.getElementById('fDesconto').value = orcamentoAtual.DESCONTO||0;
+    document.getElementById('fValidade').value = orcamentoAtual.VALIDADE_DIAS||15;
+    document.getElementById('fValorTotal').value = orcamentoAtual.VALOR_TOTAL||0;
+    let itensSalvos = [];
+    try { itensSalvos = JSON.parse(orcamentoAtual.ITENS_JSON || '[]'); } catch(e) { itensSalvos = []; }
+    gerarLinhasItens(itensSalvos);
+    modal.classList.add('open');
+  };
+
+  function coletarDadosFormulario(){
+    const listaItens = coletarItens();
+    const desconto = Number(document.getElementById('fDesconto').value) || 0;
+    return {
+      CLIENTE_NOME: document.getElementById('fClienteNome').value.trim(),
+      CLIENTE_TELEFONE: document.getElementById('fClienteTelefone').value.trim(),
+      APARELHO: document.getElementById('fAparelho').value.trim(),
+      PROBLEMA_RELATADO: document.getElementById('fProblema').value.trim(),
+      ITENS_JSON: JSON.stringify(listaItens),
+      DESCONTO: desconto, VALOR_TOTAL: Number(document.getElementById('fValorTotal').value) || 0,
+      VALIDADE_DIAS: Number(document.getElementById('fValidade').value)||15
+    };
+  }
+
+  async function salvarOrcamento(){
+    const dados = coletarDadosFormulario();
+    if (!dados.CLIENTE_NOME){ mostrarToast('Informe o nome do cliente.', 'erro'); return null; }
+
+    if (orcamentoAtual) {
+      if (!(await checarPermissao('ORCAMENTOS','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return null; }
+      await dbUpdate('ORCAMENTOS', orcamentoAtual.ID, dados);
+      Object.assign(orcamentoAtual, dados);
+      return orcamentoAtual;
+    } else {
+      if (!(await checarPermissao('ORCAMENTOS','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return null; }
+      const empresaId = await obterLojaParaAcao('Orçamento de qual loja?');
+      if (!empresaId) { mostrarToast('Cadastro cancelado — é preciso escolher a loja.', 'erro'); return null; }
+      const ano = new Date().getFullYear();
+      const totalAno = itens.filter(o => String(o.NUMERO_ORCAMENTO).startsWith('ORC-'+ano)).length;
+      const numero = 'ORC-' + ano + '-' + String(totalAno+1).padStart(5,'0');
+      orcamentoAtual = await dbInsert('ORCAMENTOS', Object.assign({
+        NUMERO_ORCAMENTO: numero, EMPRESA_ID: empresaId, DATA: new Date().toISOString(), STATUS: 'Aberto'
+      }, dados));
+      return orcamentoAtual;
+    }
+  }
+
+  document.getElementById('btnSalvar').addEventListener('click', async () => {
+    try {
+      const salvo = await salvarOrcamento();
+      if (!salvo) return;
+      mostrarToast('Orçamento salvo.');
+      modal.classList.remove('open');
+      carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  window.__excluirOrcamento = async (id) => {
+    if (!confirm('Excluir este orçamento?')) return;
+    try {
+      if (!(await checarPermissao('ORCAMENTOS','EXCLUIR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      await dbDelete('ORCAMENTOS', id);
+      mostrarToast('Orçamento excluído.');
+      carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  };
+
+  function textoOrcamento(o){
+    const listaItens = JSON.parse(o.ITENS_JSON || '[]');
+    const subtotal = listaItens.reduce((s,i) => s + i.preco, 0);
+    const nomeLoja = (empresas[0] && empresas[0].NOME) || 'Nossa loja';
+    let texto = `📋 *${nomeLoja}* — Orçamento ${o.NUMERO_ORCAMENTO}\n\n`;
+    texto += `Cliente: ${o.CLIENTE_NOME}\n`;
+    if (o.APARELHO) texto += `Aparelho: ${o.APARELHO}\n`;
+    if (o.PROBLEMA_RELATADO) texto += `Problema relatado: ${o.PROBLEMA_RELATADO}\n`;
+    texto += `\n*Itens do orçamento:*\n`;
+    texto += listaItens.map(i => `• ${i.item} — ${moeda(i.preco)}`).join('\n');
+    texto += `\n\nSubtotal: ${moeda(subtotal)}`;
+    if (o.DESCONTO) texto += `\nDesconto: ${moeda(o.DESCONTO)}`;
+    texto += `\n*Total: ${moeda(o.VALOR_TOTAL)}*`;
+    texto += `\n\nOrçamento válido por ${o.VALIDADE_DIAS} dias.`;
+    return texto;
+  }
+
+  /** Monta um cartão bonito (HTML) do orçamento, fundo claro — fica ótimo como imagem de chat. */
+  function montarCartaoOrcamento(o, logoDataUrl){
+    const listaItens = JSON.parse(o.ITENS_JSON || '[]');
+    const nomeLoja = 'BSTYLE - Eletrônicos & Acessórios';
+    const logoHtml = logoDataUrl
+      ? `<div style="background:#fff; border-radius:8px; padding:5px 8px; flex-shrink:0; display:flex; align-items:center;"><img src="${logoDataUrl}" style="height:32px; width:auto; object-fit:contain; display:block;"></div>`
+      : `<div style="width:40px; height:40px; background:#fff; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; color:#e2401c; flex-shrink:0;">B</div>`;
+    return `
+      <div style="width:520px; background:#ffffff; font-family:'Segoe UI',Arial,sans-serif; color:#1a1a1a; padding:0;">
+        <div style="background:linear-gradient(135deg,#e2401c,#f5a623); padding:22px 26px; display:flex; align-items:center; gap:12px;">
+          ${logoHtml}
+          <div>
+            <div style="font-size:15px; font-weight:800; color:#fff;">${nomeLoja}</div>
+            <div style="font-size:11.5px; color:rgba(255,255,255,0.85);">Orçamento Nº ${o.NUMERO_ORCAMENTO}</div>
+          </div>
+        </div>
+        <div style="padding:24px 26px;">
+          <div style="font-size:12.5px; color:#555; margin-bottom:14px; line-height:1.7;">
+            <b>Cliente:</b> ${o.CLIENTE_NOME}<br>
+            ${o.APARELHO ? '<b>Aparelho:</b> ' + o.APARELHO + '<br>' : ''}
+            ${o.PROBLEMA_RELATADO ? '<b>Problema relatado:</b> ' + o.PROBLEMA_RELATADO : ''}
+          </div>
+          <table style="width:100%; border-collapse:collapse; margin-bottom:6px;">
+            <thead><tr style="border-bottom:2px solid #eee;"><th style="text-align:left; font-size:10.5px; color:#999; padding-bottom:8px; text-transform:uppercase;">Item</th><th style="text-align:right; font-size:10.5px; color:#999; padding-bottom:8px; text-transform:uppercase;">Valor</th></tr></thead>
+            <tbody>
+              ${listaItens.map(i => `<tr style="border-bottom:1px solid #f2f2f2;"><td style="padding:8px 0; font-size:13px;">${i.item}</td><td style="padding:8px 0; font-size:13px; text-align:right;">${moeda(i.preco)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+          <div style="text-align:center; font-size:11px; color:#999; margin-top:20px;">Orçamento válido por ${o.VALIDADE_DIAS} dias · gerado em ${dataBR(o.DATA)}</div>
+        </div>
+      </div>`;
+  }
+
+  async function carregarHtml2Canvas(){
+    return new Promise(resolve => {
+      if (window.html2canvas) return resolve();
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      s.onload = resolve; s.onerror = resolve;
+      document.head.appendChild(s);
+    });
+  }
+
+  /** Gera a imagem do cartão fora da tela, converte em arquivo PNG. */
+  async function gerarImagemOrcamento(o){
+    await carregarHtml2Canvas();
+    if (!window.html2canvas) throw new Error('Não consegui carregar a biblioteca de imagem (sem internet?).');
+
+    let logoDataUrl = null;
+    try { const logo = await carregarLogoComoDataUrl(); logoDataUrl = logo ? logo.url : null; } catch (e) { logoDataUrl = null; }
+
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed; left:-9999px; top:0; z-index:-1;';
+    holder.innerHTML = montarCartaoOrcamento(o, logoDataUrl);
+    document.body.appendChild(holder);
+
+    // Espera a logo (se tiver) terminar de decodificar antes de tirar o "print" — evita pegar o card pela metade.
+    const imgLogo = holder.querySelector('img');
+    if (imgLogo && !imgLogo.complete) {
+      await new Promise(res => { imgLogo.onload = res; imgLogo.onerror = res; setTimeout(res, 1500); });
+    }
+
+    let canvas;
+    try {
+      canvas = await window.html2canvas(holder.firstElementChild, {
+        scale: 2, backgroundColor: '#ffffff', useCORS: true, allowTaint: false, logging: false
+      });
+    } finally {
+      document.body.removeChild(holder);
+    }
+
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(blob => {
+        if (!blob) { reject(new Error('Não consegui converter o cartão em imagem.')); return; }
+        resolve(blob);
+      }, 'image/png');
+    });
+  }
+
+  document.getElementById('btnEnviarWpp').addEventListener('click', async () => {
+    try {
+      const salvo = await salvarOrcamento();
+      if (!salvo) return;
+
+      mostrarToast('Gerando imagem…');
+      const blob = await gerarImagemOrcamento(salvo);
+      const arquivo = new File([blob], 'Orcamento_' + salvo.NUMERO_ORCAMENTO + '.png', { type: 'image/png' });
+
+      // Abre a imagem numa aba nova sempre — dá pra clicar com o botão direito
+      // e "Copiar imagem" ou "Salvar imagem como...", direto do navegador.
+      const urlAbaNova = URL.createObjectURL(blob);
+      window.open(urlAbaNova, '_blank');
+
+      // No celular, isso abre o menu de compartilhar de verdade com a imagem já anexada.
+      if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+        try {
+          await navigator.share({ files: [arquivo], title: 'Orçamento ' + salvo.NUMERO_ORCAMENTO, text: textoOrcamento(salvo) });
+        } catch (erroShare) {
+          if (erroShare.name !== 'AbortError') mostrarToast('Não deu pra compartilhar direto — a imagem está aberta na outra aba, copie de lá.', 'erro');
+        }
+      } else {
+        // Sem suporte a compartilhar arquivo (a maioria dos computadores) -- baixa a imagem também.
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = arquivo.name; a.click();
+        URL.revokeObjectURL(url);
+      }
+      mostrarToast('Imagem aberta em outra aba — clique com o botão direito nela pra copiar ou salvar.');
+      carregar();
+    } catch (e) {
+      if (e.name === 'AbortError') return; // usuário cancelou o compartilhamento, tudo bem
+      console.error('Erro ao gerar imagem do orçamento:', e);
+      mostrarToast('Erro ao gerar imagem: ' + e.message, 'erro');
+    }
+  });
+
+  /** Desenha uma "via" compacta do orçamento (grade com bordas, como um formulário
+   * de papel) dentro de uma faixa vertical da página — usada duas vezes na mesma
+   * folha A4 (via da loja + via do cliente), uma embaixo da outra. */
+  /** Desenha uma "via" compacta do orçamento (grade com bordas, como um formulário
+   * de papel) dentro de uma faixa vertical da página — usada duas vezes na mesma
+   * folha A4 (via da loja + via do cliente), uma embaixo da outra. Cabeçalho no
+   * mesmo padrão visual usado no Termo de Garantia (logo + nome + barra de degradê). */
+  function desenharViaOrcamento(doc, dados, logo, yTopo, rotuloVia){
+    const xEsq = 15, xDir = 195, largura = xDir - xEsq;
+    let y = yTopo;
+
+    // ---------- Cabeçalho compacto, mesmo padrão visual da Garantia ----------
+    let xTextoMarca = xEsq;
+    if (logo) {
+      const areaAltura = 10, proporcao = logo.largura / logo.altura;
+      const larguraFinal = areaAltura * proporcao;
+      doc.addImage(logo.url, 'PNG', xEsq, y - areaAltura + 2, larguraFinal, areaAltura);
+      xTextoMarca = xEsq + larguraFinal + 3;
+    }
+    doc.setFontSize(10.5); doc.setFont(undefined,'bold'); doc.setTextColor(226,64,28);
+    doc.text('BSTYLE - Eletrônicos & Acessórios', xTextoMarca, y);
+    doc.setFontSize(7); doc.setFont(undefined,'normal'); doc.setTextColor(130);
+    doc.text(rotuloVia, xDir, y - 3, { align:'right' });
+    doc.text('Impressão: ' + new Date().toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }), xDir, y, { align:'right' });
+    y += 3;
+
+    // Barra de degradê laranja -> âmbar, igual à usada no cabeçalho padrão dos documentos.
+    const corInicio = [226,64,28], corFim = [245,166,35], passos = 40, larguraFaixa = largura / passos;
+    for (let i = 0; i < passos; i++) {
+      const t = i / (passos - 1);
+      doc.setFillColor(Math.round(corInicio[0]+(corFim[0]-corInicio[0])*t), Math.round(corInicio[1]+(corFim[1]-corInicio[1])*t), Math.round(corInicio[2]+(corFim[2]-corInicio[2])*t));
+      doc.rect(xEsq + i*larguraFaixa, y, larguraFaixa+0.15, 0.9, 'F');
+    }
+    y += 5;
+
+    doc.setFontSize(13); doc.setFont(undefined,'bold'); doc.setTextColor(20);
+    doc.text('ORÇAMENTO Nº ' + dados.NUMERO_ORCAMENTO, 105, y, { align:'center' });
+    y += 6;
+
+    /** Uma célula com borda: rótulo pequeno em cima, valor embaixo — como formulário de papel. */
+    function celula(label, valor, x, larg, yc, alt){
+      doc.setDrawColor(150); doc.setLineWidth(0.25); doc.rect(x, yc, larg, alt);
+      doc.setFontSize(6.3); doc.setFont(undefined,'normal'); doc.setTextColor(130);
+      doc.text(label, x+1.5, yc+3);
+      doc.setFontSize(8.5); doc.setFont(undefined,'normal'); doc.setTextColor(20);
+      doc.text(String(valor||'—').substring(0,48), x+1.5, yc+6.4);
+    }
+
+    const alturaLinha = 8;
+    celula('CLIENTE', dados.CLIENTE_NOME, xEsq, largura*0.62, y, alturaLinha);
+    celula('TELEFONE', dados.CLIENTE_TELEFONE, xEsq+largura*0.62, largura*0.38, y, alturaLinha);
+    y += alturaLinha;
+
+    celula('APARELHO', dados.APARELHO, xEsq, largura*0.5, y, alturaLinha);
+    celula('DATA', dataBR(dados.DATA), xEsq+largura*0.5, largura*0.25, y, alturaLinha);
+    celula('VALIDADE', (dados.VALIDADE_DIAS||'—') + ' dias', xEsq+largura*0.75, largura*0.25, y, alturaLinha);
+    y += alturaLinha;
+
+    const alturaProblema = 13;
+    doc.setDrawColor(150); doc.rect(xEsq, y, largura, alturaProblema);
+    doc.setFontSize(6.3); doc.setTextColor(130); doc.text('PROBLEMA RELATADO', xEsq+1.5, y+3);
+    doc.setFontSize(8); doc.setFont(undefined,'normal'); doc.setTextColor(20);
+    const linhasProblema = doc.splitTextToSize(dados.PROBLEMA_RELATADO || '—', largura-3);
+    doc.text(linhasProblema.slice(0,2), xEsq+1.5, y+6.8);
+    y += alturaProblema;
+
+    const listaItens = JSON.parse(dados.ITENS_JSON || '[]').filter(i => i.item);
+    doc.setFontSize(6.8); doc.setFont(undefined,'bold'); doc.setTextColor(255,255,255);
+    doc.setFillColor(60,60,60); doc.rect(xEsq, y, largura, 5, 'F');
+    doc.text('ITEM / PEÇA', xEsq+2, y+3.4);
+    doc.text('VALOR', xDir-2, y+3.4, { align:'right' });
+    y += 5;
+    doc.setFont(undefined,'normal'); doc.setFontSize(8);
+    if (!listaItens.length) {
+      doc.setDrawColor(150); doc.rect(xEsq, y, largura, 5);
+      doc.setTextColor(150); doc.text('Nenhum item detalhado', xEsq+2, y+3.4);
+      y += 5;
+    } else {
+      listaItens.forEach(item => {
+        doc.setDrawColor(150); doc.rect(xEsq, y, largura, 5);
+        doc.setTextColor(20);
+        doc.text(String(item.item).substring(0,62), xEsq+2, y+3.4);
+        doc.text(moeda(item.preco), xDir-2, y+3.4, { align:'right' });
+        y += 5;
+      });
+    }
+
+    const alturaTotais = 9;
+    celula('DESCONTO', moeda(dados.DESCONTO||0), xEsq, largura*0.55, y, alturaTotais);
+    doc.setDrawColor(150); doc.rect(xEsq+largura*0.55, y, largura*0.45, alturaTotais);
+    doc.setFontSize(6.5); doc.setTextColor(130); doc.text('TOTAL', xEsq+largura*0.55+1.5, y+3.2);
+    doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(226,64,28);
+    doc.text(moeda(dados.VALOR_TOTAL), xDir-1.5, y+7.2, { align:'right' });
+    y += alturaTotais + 10;
+
+    // Duas assinaturas lado a lado — cliente e loja.
+    doc.setDrawColor(20); doc.setLineWidth(0.3);
+    doc.line(xEsq+4, y, xEsq+largura*0.46, y);
+    doc.line(xEsq+largura*0.54, y, xDir-4, y);
+    doc.setFontSize(7); doc.setFont(undefined,'normal'); doc.setTextColor(100);
+    doc.text('Assinatura do Cliente', xEsq + largura*0.25, y+4, { align:'center' });
+    doc.text('Assinatura da Loja', xEsq + largura*0.75, y+4, { align:'center' });
+
+    return y + 8;
+  }
+
+  /** Monta o PDF (as duas vias) e devolve o documento pronto — reaproveitado tanto
+   * pra salvar em arquivo quanto pra abrir direto na tela de impressão. */
+  async function montarPdfOrcamento(salvo){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    let logo = null;
+    try { logo = await carregarLogoComoDataUrl(); } catch (e) { logo = null; }
+
+    // As duas vias na mesma folha: a de cima começa logo no topo, a de baixo
+    // começa na metade da página — assim dá pra cortar ao meio depois de imprimir.
+    desenharViaOrcamento(doc, salvo, logo, 22, '1ª VIA — LOJA');
+    doc.setDrawColor(180); doc.setLineDashPattern([2,1.5], 0);
+    doc.line(15, 150, 195, 150);
+    doc.setLineDashPattern([], 0);
+    desenharViaOrcamento(doc, salvo, logo, 162, '2ª VIA — CLIENTE');
+
+    return doc;
+  }
+
+  document.getElementById('btnSalvarPdf').addEventListener('click', async () => {
+    try {
+      const salvo = await salvarOrcamento();
+      if (!salvo) return;
+      const doc = await montarPdfOrcamento(salvo);
+      doc.save('Orcamento_' + salvo.NUMERO_ORCAMENTO + '.pdf');
+      mostrarToast('PDF salvo no seu computador.');
+      modal.classList.remove('open');
+      carregar();
+    } catch (e) { mostrarToast('Erro ao gerar PDF: ' + e.message, 'erro'); }
+  });
+
+  document.getElementById('btnImprimirOrcamento').addEventListener('click', async () => {
+    try {
+      const salvo = await salvarOrcamento();
+      if (!salvo) return;
+      const doc = await montarPdfOrcamento(salvo);
+      doc.autoPrint();
+      window.open(doc.output('bloburl'), '_blank');
+      modal.classList.remove('open');
+      carregar();
+    } catch (e) { mostrarToast('Erro ao imprimir: ' + e.message, 'erro'); }
+  });
+
+  carregar();
+})();
+</script>

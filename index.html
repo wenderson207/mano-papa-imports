@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mano Papa Imports</title>
+<link rel="icon" type="image/png" href="assets/img/fav.png">
+<link rel="apple-touch-icon" href="assets/img/fav.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --mint:#2FE1A8; --blue:#4C8DFF; --amber:#F5A623; --red:#FF5C5C;
+    --font-display:'Space Grotesk',sans-serif; --font-body:'Inter',sans-serif; --font-mono:'JetBrains Mono',monospace;
+  }
+  html[data-theme="dark"]{
+    --bg-primary:#0A0D12; --bg-surface:#12161F; --bg-elevated:#1A1F2B; --hairline:#232937;
+    --text-primary:#EDEFF3; --text-secondary:#8891A3; --text-tertiary:#565F72;
+  }
+  html[data-theme="light"]{
+    --bg-primary:#F4F6F8; --bg-surface:#FFFFFF; --bg-elevated:#EEF1F4; --hairline:#E1E5EA;
+    --text-primary:#171B22; --text-secondary:#5B6472; --text-tertiary:#8B93A2;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:var(--font-body); background:var(--bg-primary); color:var(--text-primary); }
+  #tela-login{ display:grid; grid-template-columns:1.15fr 1fr; min-height:100vh; }
+  @media (max-width: 880px){ #tela-login{ grid-template-columns:1fr; } #tela-login .stage{ display:none; } }
+  .stage{ position:relative; overflow:hidden; background:
+      radial-gradient(circle at 22% 18%, rgba(47,225,168,0.10), transparent 45%),
+      radial-gradient(circle at 78% 82%, rgba(76,141,255,0.10), transparent 40%), var(--bg-primary);
+    display:flex; flex-direction:column; justify-content:space-between; padding:56px; border-right:1px solid var(--hairline); }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{ width:34px; height:34px; border-radius:9px; background:linear-gradient(135deg, var(--mint), var(--blue));
+    display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:700; color:#08110D; font-size:15px; overflow:hidden; }
+  .brand-mark img{ width:100%; height:100%; object-fit:contain; display:block; }
+  .brand-mark .fallback{ display:none; }
+  .brand-name{ font-family:var(--font-display); font-weight:600; font-size:17px; }
+  .brand-name span{ color:var(--text-tertiary); font-weight:500; }
+  .device-wrap{ position:relative; align-self:center; margin:auto 0; }
+  .device{ width:220px; height:440px; border-radius:34px; background:var(--bg-surface); border:1px solid var(--hairline);
+    position:relative; overflow:hidden; box-shadow:0 40px 80px -30px rgba(0,0,0,0.7); }
+  .device-screen{ position:absolute; inset:8px; border-radius:28px; overflow:hidden;
+    background:linear-gradient(180deg, rgba(47,225,168,0.05), rgba(76,141,255,0.03)); }
+  .scan-line{ position:absolute; left:0; right:0; height:64px; top:-64px;
+    background:linear-gradient(180deg, transparent, rgba(47,225,168,0.28) 45%, rgba(47,225,168,0.55) 50%, rgba(47,225,168,0.28) 55%, transparent);
+    animation: sweep 3.2s cubic-bezier(.65,0,.35,1) infinite; }
+  @keyframes sweep{ 0%{ top:-64px; } 55%{ top:100%; } 100%{ top:100%; } }
+  .stage-copy{ max-width:380px; }
+  .stage-copy .eyebrow{ font-family:var(--font-mono); font-size:12px; color:var(--mint); display:block; margin-bottom:10px; }
+  .stage-copy h1{ font-family:var(--font-display); font-size:26px; font-weight:600; margin-bottom:10px; }
+  .stage-copy p{ color:var(--text-secondary); font-size:14px; line-height:1.6; }
+  .form-side{ display:flex; align-items:center; justify-content:center; padding:32px; }
+  .form-card{ width:100%; max-width:360px; }
+  .form-card h2{ font-family:var(--font-display); font-size:22px; font-weight:600; margin-bottom:6px; }
+  .form-card .sub{ color:var(--text-secondary); font-size:13.5px; margin-bottom:28px; }
+  .field{ margin-bottom:16px; }
+  .field label{ display:block; font-size:12.5px; color:var(--text-secondary); margin-bottom:6px; font-weight:500; }
+  .field input{ width:100%; background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary);
+    padding:12px 14px; border-radius:9px; font-size:14px; outline:none; }
+  .field input:focus{ border-color:var(--mint); box-shadow:0 0 0 3px rgba(47,225,168,0.14); }
+  .row-between{ display:flex; justify-content:space-between; align-items:center; margin:2px 0 22px; }
+  .row-between a{ color:var(--blue); font-size:12.5px; text-decoration:none; cursor:pointer; }
+  button.submit{ width:100%; padding:13px; border-radius:9px; border:none; cursor:pointer;
+    background:linear-gradient(135deg, var(--mint), #22c093); color:#07130F; font-weight:600; font-size:14.5px;
+    display:flex; align-items:center; justify-content:center; gap:8px; }
+  button.submit:disabled{ opacity:.6; cursor:default; }
+  .alert{ display:none; font-size:12.5px; padding:10px 12px; border-radius:8px; background:rgba(255,92,92,0.08);
+    border:1px solid rgba(255,92,92,0.25); color:#FFAFAF; margin-bottom:16px; }
+  .alert.show{ display:block; }
+  #tela-app{ display:none; }
+  #tela-app.ativo{ display:grid; }
+  .app{ grid-template-columns:240px 1fr; grid-template-rows:60px 1fr; height:100vh; display:grid; }
+  .app.collapsed{ grid-template-columns:72px 1fr; }
+  .sidebar{ grid-row:1/span 2; background:var(--bg-surface); border-right:1px solid var(--hairline); display:flex; flex-direction:column; overflow:hidden; }
+  .app.collapsed .sidebar{ width:72px; }
+  nav.menu{ flex:1; overflow-y:auto; padding:12px 10px; }
+  .menu-group-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-tertiary); padding:14px 10px 6px; font-family:var(--font-mono); }
+  .menu-item{ display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:8px; margin-bottom:2px; color:var(--text-secondary);
+    cursor:pointer; font-size:13.5px; position:relative; }
+  .menu-item:hover{ background:var(--bg-elevated); color:var(--text-primary); }
+  .menu-item.active{ background:var(--bg-elevated); color:var(--text-primary); }
+  .menu-item.active::before{ content:''; position:absolute; left:-10px; top:6px; bottom:6px; width:3px; border-radius:3px; background:linear-gradient(180deg, var(--mint), var(--blue)); }
+  .ico{ width:17px; text-align:center; font-size:14px; }
+  .app.collapsed .label, .app.collapsed .menu-group-label, .app.collapsed .brand-name{ display:none; }
+  .navbar{ grid-column:2; background:var(--bg-surface); border-bottom:1px solid var(--hairline); display:flex; align-items:center; justify-content:space-between; padding:0 22px; gap:16px; }
+  .crumb{ font-size:13px; color:var(--text-secondary); }
+  .crumb b{ color:var(--text-primary); font-weight:600; }
+  .icon-btn{ width:34px; height:34px; border-radius:8px; border:1px solid var(--hairline); background:var(--bg-elevated); color:var(--text-secondary); cursor:pointer; }
+  .avatar{ width:34px; height:34px; border-radius:9px; background:linear-gradient(135deg, var(--blue), var(--mint)); display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:700; color:#08110D; cursor:pointer; }
+  .content{ grid-column:2; overflow-y:auto; padding:26px 28px 40px; }
+  .toast-wrap{ position:fixed; bottom:22px; right:22px; z-index:200; display:flex; flex-direction:column; gap:8px; }
+  .btn-hamburguer{ display:none; }
+  .sidebar-backdrop{ display:none; }
+  @media (max-width: 880px){
+    #tela-login{ grid-template-columns:1fr; }
+    .stage{ display:none; }
+    .app, .app.collapsed{ grid-template-columns:1fr; grid-template-rows:56px 1fr; }
+    .btn-hamburguer{ display:flex; align-items:center; justify-content:center; }
+    #btnCollapse{ display:none; }
+    .sidebar{
+      position:fixed; top:0; left:0; bottom:0; width:240px; z-index:60;
+      transform:translateX(-100%); transition:transform .2s ease; box-shadow:0 0 40px rgba(0,0,0,0.4);
+    }
+    .sidebar.aberta{ transform:translateX(0); }
+    .app.collapsed .sidebar{ width:240px; }
+    .app.collapsed .label, .app.collapsed .menu-group-label, .app.collapsed .brand-name{ display:block; }
+    .sidebar-backdrop{
+      position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:55; display:none;
+    }
+    .sidebar-backdrop.aberta{ display:block; }
+    .navbar{ grid-column:1; padding:0 14px; }
+    .navbar .crumb{ font-size:12px; }
+    .content{ grid-column:1; padding:16px 14px 32px; }
+    .kpi-grid{ grid-template-columns:1fr 1fr; gap:10px; }
+    .frow2, .frow3{ grid-template-columns:1fr !important; }
+    table.dt{ display:block; overflow-x:auto; white-space:nowrap; -webkit-overflow-scrolling:touch; }
+    .modal-box{ max-width:100% !important; }
+    .toolbar{ flex-direction:column; align-items:stretch; }
+  }
+  @media (max-width: 420px){
+    .kpi-grid{ grid-template-columns:1fr; }
+  }
+  .toast{ background:var(--bg-elevated); border:1px solid var(--hairline); border-left:3px solid var(--mint); color:var(--text-primary);
+    padding:12px 16px; border-radius:8px; font-size:12.5px; box-shadow:0 12px 30px -10px rgba(0,0,0,0.5); min-width:220px; }
+  .toast.err{ border-left-color:var(--red); }
+  .toolbar{ display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:18px; flex-wrap:wrap; }
+  .btn{ display:inline-flex; align-items:center; gap:6px; padding:9px 15px; border-radius:8px; border:1px solid var(--hairline); background:var(--bg-surface); color:var(--text-primary); font-size:12.5px; font-weight:500; cursor:pointer; }
+  .btn-primary{ background:linear-gradient(135deg, var(--mint), #22c093); border-color:transparent; color:#07130F; font-weight:600; }
+  table.dt{ width:100%; border-collapse:collapse; background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; overflow:hidden; }
+  table.dt thead th{ text-align:left; font-size:11px; text-transform:uppercase; color:var(--text-tertiary); font-family:var(--font-mono); font-weight:500; padding:12px 16px; border-bottom:1px solid var(--hairline); background:var(--bg-elevated); }
+  table.dt tbody td{ padding:13px 16px; font-size:13px; border-bottom:1px solid var(--hairline); }
+  .empty-row td{ text-align:center; padding:48px 16px; color:var(--text-tertiary); }
+  .kpi-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin-bottom:26px; }
+  .kpi{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; padding:16px 18px; }
+  .kpi .lbl{ font-size:11.5px; color:var(--text-tertiary); font-family:var(--font-mono); text-transform:uppercase; margin-bottom:8px; }
+  .kpi .val{ font-family:var(--font-display); font-size:22px; font-weight:600; }
+</style>
+</head>
+<body>
+<div class="toast-wrap" id="toastWrap"></div>
+<div id="tela-login">
+  <div class="stage">
+    <div class="brand">
+      <div class="brand-mark">
+        <img src="assets/img/Logo.png" alt="Logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <span class="fallback" style="width:100%; height:100%; align-items:center; justify-content:center;">B</span>
+      </div>
+      <div class="brand-name">Mano Papa - <span> IMPORTS</span></div>
+    </div>
+    <div class="device-wrap">
+      <div class="device"><div class="device-screen"><div class="scan-line"></div></div></div>
+    </div>
+    <div class="stage-copy">
+      <span class="eyebrow">// DIAGNÓSTICO EM TEMPO REAL</span>
+      <h1>Cada aparelho, cada venda, cada garantia — sob controle.</h1>
+      <p>Gestão completa de loja e assistência técnica, agora direto no navegador — sem esperar servidor nenhum "esquentar".</p>
+    </div>
+  </div>
+  <div class="form-side">
+    <div class="form-card">
+      <h2>Entrar</h2>
+      <p class="sub">Acesse sua conta para continuar.</p>
+      <div class="alert" id="alertBox"></div>
+      <form id="loginForm">
+        <div class="field"><label>Email</label><input type="email" id="email" placeholder="voce@manopapa.com" required></div>
+        <div class="field"><label>Senha</label><input type="password" id="senha" placeholder="••••••••" required></div>
+        <div class="row-between"><span></span><a id="linkEsqueci">Esqueci minha senha</a></div>
+        <button type="submit" class="submit" id="btnSubmit"><span id="btnLabel">Entrar</span></button>
+      </form>
+    </div>
+  </div>
+</div>
+<div id="tela-app">
+  <div class="app" id="app">
+    <aside class="sidebar">
+      <div class="brand" style="padding:18px; border-bottom:1px solid var(--hairline);">
+        <div class="brand-mark">
+          <img src="assets/img/Logo.png" alt="Logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <span class="fallback" style="width:100%; height:100%; align-items:center; justify-content:center;">B</span>
+        </div>
+        <div class="brand-name">MANO PAPA<span></span></div>
+      </div>
+      <nav class="menu" id="menu">
+        <div class="menu-group-label">Visão geral</div>
+        <div class="menu-item active" data-modulo="DASHBOARD"><span class="ico">◆</span><span class="label">Dashboard</span></div>
+        <div class="menu-item" data-modulo="AGENDA"><span class="ico">📅</span><span class="label">Agenda</span></div>
+        <div class="menu-group-label">Cadastros</div>
+        <div class="menu-item" data-modulo="CLIENTES"><span class="ico">◇</span><span class="label">Clientes</span></div>
+        <div class="menu-item" data-modulo="PRODUTOS"><span class="ico">▢</span><span class="label">Produtos</span></div>
+        <div class="menu-item" data-modulo="CELULARES"><span class="ico">📱</span><span class="label">Celulares</span></div>
+        <div class="menu-item" data-modulo="FORNECEDORES"><span class="ico">▤</span><span class="label">Fornecedores</span></div>
+        <div class="menu-item" data-modulo="FUNCIONARIOS"><span class="ico">◎</span><span class="label">Funcionários</span></div>
+        <div class="menu-item" data-modulo="EMPRESAS"><span class="ico">▣</span><span class="label">Empresas</span></div>
+        <div class="menu-group-label">Operação</div>
+        <div class="menu-item" data-modulo="VENDAS"><span class="ico">$</span><span class="label">Vendas (PDV)</span></div>
+        <div class="menu-item" data-modulo="ORCAMENTOS"><span class="ico">≡</span><span class="label">Orçamentos</span></div>
+        <div class="menu-item" data-modulo="COMPRAS"><span class="ico">↓</span><span class="label">Compras</span></div>
+        <div class="menu-item" data-modulo="ESTOQUE"><span class="ico">▦</span><span class="label">Estoque</span></div>
+        <div class="menu-item" data-modulo="DIVERGENCIAS_ESTOQUE"><span class="ico">⚠</span><span class="label">Divergências</span></div>
+        <div class="menu-item" data-modulo="ASSISTENCIA"><span class="ico">⚙</span><span class="label">Assistência técnica</span></div>
+        <div class="menu-item" data-modulo="GARANTIAS"><span class="ico">✓</span><span class="label">Garantias</span></div>
+        <div class="menu-group-label">Gestão</div>
+        <div class="menu-item" data-modulo="CONTROLE_PONTO"><span class="ico">🕐</span><span class="label">Controle de Ponto</span></div>
+        <div class="menu-item" data-modulo="FINANCEIRO"><span class="ico">◈</span><span class="label">Financeiro</span></div>
+        <div class="menu-item" data-modulo="RELATORIOS"><span class="ico">▥</span><span class="label">Relatórios</span></div>
+        <div class="menu-item" data-modulo="CONFIGURACOES"><span class="ico">✦</span><span class="label">Configurações</span></div>
+      </nav>
+      <button class="btn" id="btnCollapse" style="margin:10px;">‹ Recolher</button>
+    </aside>
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+    <header class="navbar">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button class="icon-btn btn-hamburguer" id="btnHamburguer">☰</button>
+        <div class="crumb">MANO PAPA / <b id="crumbAtual">Dashboard</b></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <select id="seletorLojaGlobal" style="background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:8px 10px; border-radius:8px; font-size:12.5px; max-width:170px;">
+          <option value="">Todas as lojas</option>
+        </select>
+        <button class="icon-btn" id="btnTheme">☾</button>
+        <div class="avatar" id="avatarBtn">?</div>
+        <button class="btn" id="btnLogout">Sair</button>
+      </div>
+    </header>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+<script src="assets/js/firebase-init.js"></script>
+<script src="assets/js/db.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

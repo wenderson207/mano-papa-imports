@@ -1,0 +1,277 @@
+<style>
+  .chart-card{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; padding:18px 20px; }
+  .chart-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; align-items:start; }
+  @media (max-width: 980px){ .chart-grid{ grid-template-columns:1fr; } }
+  .filtros{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
+  .filtros select, .filtros input{ background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:8px 12px; border-radius:8px; font-size:12.5px; }
+  .chart-sub{ font-size:11px; color:var(--text-tertiary); margin:-8px 0 12px; }
+</style>
+
+<div class="toolbar"><div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Estoque</h1>
+<p style="color:var(--text-secondary); font-size:13px; margin:0;">Quanto você tem parado em mercadoria, por loja e no total.</p></div></div>
+
+<div class="kpi-grid" id="kpiGrid">
+  <div class="kpi"><div class="lbl">Valor em custo</div><div class="val">—</div></div>
+  <div class="kpi"><div class="lbl">Valor em venda (potencial)</div><div class="val">—</div></div>
+  <div class="kpi"><div class="lbl">Lucro potencial</div><div class="val">—</div></div>
+  <div class="kpi"><div class="lbl">Itens em estoque</div><div class="val">—</div></div>
+</div>
+
+<div class="filtros">
+  <select id="filtroCategoria"><option value="">Todas as categorias</option></select>
+  <select id="filtroSituacao">
+    <option value="">Todas as situações</option>
+    <option value="baixo">Só estoque baixo</option>
+    <option value="ok">Só estoque OK</option>
+  </select>
+  <input id="busca" placeholder="Nome, SKU ou código de barras…" style="min-width:220px;">
+  <span style="font-size:11.5px; color:var(--text-tertiary);">↓ os filtros acima também mudam os gráficos e a tabela</span>
+</div>
+
+<div class="chart-grid">
+  <div>
+    <div class="chart-card" style="margin-bottom:16px;"><h4 style="font-family:var(--font-display); font-size:14px; margin:0 0 4px;">🏬 Valor em estoque por loja</h4>
+      <p class="chart-sub">Sempre mostra todas as lojas, mesmo com uma loja específica selecionada lá em cima.</p>
+      <div id="avisoSemDadosLojas" style="display:none; color:var(--text-tertiary); font-size:12.5px; padding:20px 0; text-align:center;"></div>
+      <canvas id="chartLojas" height="130"></canvas>
+    </div>
+    <div class="chart-card"><h4 style="font-family:var(--font-display); font-size:14px; margin:0 0 4px;">🚨 Produtos com estoque baixo por loja</h4>
+      <p class="chart-sub">Quantos itens estão abaixo do mínimo em cada loja — ajuda a saber onde repor primeiro.</p>
+      <div id="avisoSemDadosBaixo" style="display:none; color:var(--text-tertiary); font-size:12.5px; padding:20px 0; text-align:center;"></div>
+      <canvas id="chartEstoqueBaixo" height="110"></canvas>
+    </div>
+  </div>
+  <div class="chart-card"><h4 style="font-family:var(--font-display); font-size:14px; margin:0 0 4px;">Valor por categoria</h4>
+    <p class="chart-sub" id="chartCategoriaSub">Categorias com maior valor em estoque (preço de venda).</p>
+    <div id="avisoSemDadosCategoria" style="display:none; color:var(--text-tertiary); font-size:12.5px; padding:20px 0; text-align:center;"></div>
+    <canvas id="chartCategoria"></canvas>
+  </div>
+</div>
+
+<table class="dt">
+  <thead><tr><th>Produto</th><th>Categoria</th><th>Loja</th><th>Estoque atual</th><th>Mínimo</th><th>Valor em custo</th><th>Situação</th><th></th></tr></thead>
+  <tbody id="linhas"><tr class="empty-row"><td colspan="8">Carregando…</td></tr></tbody>
+</table>
+
+<script>
+(async function(){
+  let produtosTodos = [], produtosParaComparacaoLojas = [], produtos = [], empresas = [];
+
+  function moeda(v){ return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
+  function nomeLoja(id){ if (!id) return 'Sem loja'; const e = empresas.find(x=>x.ID===id); return e?e.NOME:'—'; }
+  function valorProduto(p, campo){ return (Number(p.ESTOQUE_ATUAL)||0) * (Number(p[campo])||0); }
+
+  /** Tenta carregar um script; resolve true/false conforme sucesso, com um tempo limite. */
+  function tentarCarregarScript(src, timeoutMs){
+    return new Promise((resolve) => {
+      let resolvido = false;
+      const finalizar = (ok) => { if (!resolvido) { resolvido = true; resolve(ok); } };
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = () => finalizar(true);
+      s.onerror = () => finalizar(false);
+      document.head.appendChild(s);
+      setTimeout(() => finalizar(false), timeoutMs);
+    });
+  }
+
+  /** Carrega o Chart.js tentando dois provedores diferentes, caso um esteja bloqueado nesse aparelho/rede. */
+  async function carregarChartJs(){
+    if (window.Chart) return;
+    const provedores = [
+      'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js',
+      'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js'
+    ];
+    for (const url of provedores) {
+      const ok = await tentarCarregarScript(url, 6000);
+      if (ok && window.Chart) return;
+    }
+    console.error('Não consegui carregar o Chart.js por nenhum dos dois provedores (rede bloqueando ambos?).');
+  }
+
+  async function carregar(){
+    try {
+      if (!(await checarPermissao('ESTOQUE','VISUALIZAR'))){ setHTML('linhas', '<tr class="empty-row"><td colspan="8">Sem permissão.</td></tr>'); return; }
+      empresas = await dbGetAll('EMPRESAS');
+      let todos = (await dbGetAll('PRODUTOS')).filter(p => p.STATUS === 'Ativo');
+      produtosTodos = window.lojaAtivaId ? todos.filter(p => p.EMPRESA_ID === window.lojaAtivaId) : todos;
+      produtosParaComparacaoLojas = todos; // este gráfico compara TODAS as lojas, mesmo com um filtro ativo
+
+      const categorias = [...new Set(produtosTodos.map(p => p.CATEGORIA || 'Geral'))];
+      setHTML('filtroCategoria', '<option value="">Todas as categorias</option>' + categorias.map(c => `<option value="${c}">${c}</option>`).join(''));
+
+      aplicarFiltros();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  }
+
+  function aplicarFiltrosLocais(lista){
+    const categoria = document.getElementById('filtroCategoria').value;
+    const situacao = document.getElementById('filtroSituacao').value;
+    const termo = document.getElementById('busca').value.toLowerCase();
+
+    return lista.filter(p => {
+      if (categoria && (p.CATEGORIA||'Geral') !== categoria) return false;
+      const baixo = Number(p.ESTOQUE_ATUAL) <= Number(p.ESTOQUE_MINIMO);
+      if (situacao === 'baixo' && !baixo) return false;
+      if (situacao === 'ok' && baixo) return false;
+      if (termo){
+        const corresponde = (p.NOME||'').toLowerCase().includes(termo) || (p.SKU||'').toLowerCase().includes(termo) || (p.CODIGO_BARRAS||'').toLowerCase().includes(termo);
+        if (!corresponde) return false;
+      }
+      return true;
+    });
+  }
+
+  function aplicarFiltros(){
+    produtos = aplicarFiltrosLocais(produtosTodos);
+    renderKpis();
+    renderLinhas();
+    renderGraficos();
+  }
+  ['filtroCategoria','filtroSituacao'].forEach(id => document.getElementById(id).addEventListener('change', aplicarFiltros));
+  document.getElementById('busca').addEventListener('input', aplicarFiltros);
+
+  function renderKpis(){
+    const valorCusto = produtos.reduce((s,p) => s + valorProduto(p,'PRECO_CUSTO'), 0);
+    const valorVenda = produtos.reduce((s,p) => s + valorProduto(p,'PRECO_VENDA'), 0);
+    const totalItens = produtos.reduce((s,p) => s + (Number(p.ESTOQUE_ATUAL)||0), 0);
+    const kpis = document.querySelectorAll('#kpiGrid .kpi .val');
+    kpis[0].textContent = moeda(valorCusto);
+    kpis[1].textContent = moeda(valorVenda);
+    kpis[2].textContent = moeda(valorVenda - valorCusto);
+    kpis[3].textContent = totalItens;
+  }
+
+  function renderLinhas(){
+    if (!produtos.length){ setHTML('linhas', '<tr class="empty-row"><td colspan="8">Nenhum produto encontrado.</td></tr>'); return; }
+    setHTML('linhas', produtos.map(p => {
+      const baixo = Number(p.ESTOQUE_ATUAL) <= Number(p.ESTOQUE_MINIMO);
+      return `<tr><td><b>${p.NOME}</b></td><td>${p.CATEGORIA||'Geral'}</td><td>${nomeLoja(p.EMPRESA_ID)}</td><td>${p.ESTOQUE_ATUAL}</td><td>${p.ESTOQUE_MINIMO}</td>
+        <td>${moeda(valorProduto(p,'PRECO_CUSTO'))}</td>
+        <td>${baixo?'<span class="badge warn">Baixo</span>':'<span class="badge ok">OK</span>'}</td>
+        <td><button class="btn" style="padding:6px 10px;font-size:11.5px;" onclick="window.__ajustar('${p.ID}','${p.NOME.replace(/'/g,"\\'")}',${p.ESTOQUE_ATUAL})">Ajustar</button></td></tr>`;
+    }).join(''));
+  }
+
+  async function renderGraficos(){
+    await carregarChartJs();
+    if (!window.Chart) {
+      console.error('Chart.js não carregou — gráficos não vão aparecer.');
+      const aviso = '<div style="text-align:center; color:var(--amber); font-size:12.5px; padding:30px 0;">⚠️ Não consegui carregar a biblioteca de gráficos (tentei 2 endereços diferentes). Pode ser algum bloqueador de anúncio ou modo de privacidade ativo no seu navegador — tente desativar e recarregar.</div>';
+      document.getElementById('chartLojas').closest('.chart-card').insertAdjacentHTML('beforeend', aviso);
+      document.getElementById('chartCategoria').closest('.chart-card').insertAdjacentHTML('beforeend', aviso);
+      return;
+    }
+
+    // ---------- Valor em estoque por loja (sempre todas as lojas, respeita os outros filtros) ----------
+    try {
+      const produtosComparacaoFiltrados = aplicarFiltrosLocais(produtosParaComparacaoLojas);
+      const lojasComValor = empresas.length ? empresas : [{ ID:'', NOME:'Sem loja' }];
+      const labelsLoja = lojasComValor.map(e => e.NOME);
+      const valoresCustoLoja = lojasComValor.map(e => produtosComparacaoFiltrados.filter(p => p.EMPRESA_ID === e.ID).reduce((s,p)=>s+valorProduto(p,'PRECO_CUSTO'),0));
+      const valoresVendaLoja = lojasComValor.map(e => produtosComparacaoFiltrados.filter(p => p.EMPRESA_ID === e.ID).reduce((s,p)=>s+valorProduto(p,'PRECO_VENDA'),0));
+
+      const semDados = !empresas.length || (valoresCustoLoja.every(v=>v===0) && valoresVendaLoja.every(v=>v===0));
+      document.getElementById('avisoSemDadosLojas').style.display = semDados ? 'block' : 'none';
+      document.getElementById('chartLojas').style.display = semDados ? 'none' : 'block';
+      if (semDados) {
+        document.getElementById('avisoSemDadosLojas').textContent = !empresas.length
+          ? 'Cadastre suas lojas em Empresas pra ver essa comparação.'
+          : 'Nenhum produto com valor de custo cadastrado ainda (confira se o "Preço de custo" foi preenchido nos produtos).';
+      }
+
+      const chartLojasExistente = Chart.getChart('chartLojas');
+      if (chartLojasExistente) chartLojasExistente.destroy();
+      if (!semDados) new Chart(document.getElementById('chartLojas').getContext('2d'), {
+        type: 'bar',
+        data: { labels: labelsLoja, datasets: [
+          { label:'Valor de custo', data: valoresCustoLoja, backgroundColor:'rgba(76,141,255,0.75)', borderRadius:5 },
+          { label:'Valor de venda', data: valoresVendaLoja, backgroundColor:'rgba(47,225,168,0.75)', borderRadius:5 }
+        ] },
+        options: {
+          plugins:{ legend:{ labels:{ color:'#8891A3', font:{ size:10.5 } } },
+            tooltip:{ callbacks:{ label: (ctx) => ctx.dataset.label + ': ' + moeda(ctx.parsed.y) } } },
+          scales:{ x:{ grid:{ display:false }, ticks:{ color:'#8891A3' } }, y:{ grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#8891A3', callback: v => moeda(v) } } }
+        }
+      });
+    } catch (e) { console.error('Erro no gráfico de lojas:', e); }
+
+    // ---------- Estoque baixo por loja ----------
+    try {
+      const produtosComparacaoFiltrados = aplicarFiltrosLocais(produtosParaComparacaoLojas);
+      const lojasComValor = empresas.length ? empresas : [{ ID:'', NOME:'Sem loja' }];
+      const qtdBaixoPorLoja = lojasComValor.map(e => produtosComparacaoFiltrados.filter(p => p.EMPRESA_ID === e.ID && Number(p.ESTOQUE_ATUAL) <= Number(p.ESTOQUE_MINIMO)).length);
+
+      const semDadosBaixo = !empresas.length || qtdBaixoPorLoja.every(v => v === 0);
+      document.getElementById('avisoSemDadosBaixo').style.display = semDadosBaixo ? 'block' : 'none';
+      document.getElementById('chartEstoqueBaixo').style.display = semDadosBaixo ? 'none' : 'block';
+      if (semDadosBaixo) document.getElementById('avisoSemDadosBaixo').textContent = !empresas.length ? 'Cadastre suas lojas em Empresas.' : 'Nenhum produto em estoque baixo — tudo certo! 🎉';
+
+      const chartBaixoExistente = Chart.getChart('chartEstoqueBaixo');
+      if (chartBaixoExistente) chartBaixoExistente.destroy();
+      if (!semDadosBaixo) new Chart(document.getElementById('chartEstoqueBaixo').getContext('2d'), {
+        type: 'bar',
+        data: { labels: lojasComValor.map(e=>e.NOME), datasets: [{ data: qtdBaixoPorLoja, backgroundColor:'rgba(255,92,92,0.7)', borderRadius:5 }] },
+        options: { plugins:{ legend:{ display:false } }, scales:{ x:{ grid:{ display:false }, ticks:{ color:'#8891A3' } }, y:{ grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#8891A3', precision:0 } } } }
+      });
+    } catch (e) { console.error('Erro no gráfico de estoque baixo:', e); }
+
+    // ---------- Valor por categoria (barra horizontal — lê muito melhor com muitas categorias) ----------
+    try {
+      const porCategoria = {};
+      produtos.forEach(p => { const cat = p.CATEGORIA || 'Geral'; porCategoria[cat] = (porCategoria[cat]||0) + valorProduto(p,'PRECO_VENDA'); });
+
+      let entradas = Object.entries(porCategoria).sort((a,b) => b[1]-a[1]);
+      const LIMITE = 6;
+      if (entradas.length > LIMITE) {
+        const principais = entradas.slice(0, LIMITE);
+        const outros = entradas.slice(LIMITE).reduce((s,[,v]) => s+v, 0);
+        entradas = [...principais, ['Outros ('+(entradas.length-LIMITE)+' categorias)', outros]];
+        document.getElementById('chartCategoriaSub').textContent = 'Top ' + LIMITE + ' categorias por valor de venda — as demais somadas em "Outros".';
+      } else {
+        document.getElementById('chartCategoriaSub').textContent = 'Categorias com maior valor em estoque (preço de venda).';
+      }
+
+      const semDadosCategoria = entradas.every(([,v]) => v === 0) || !entradas.length;
+      document.getElementById('avisoSemDadosCategoria').style.display = semDadosCategoria ? 'block' : 'none';
+      document.getElementById('chartCategoria').style.display = semDadosCategoria ? 'none' : 'block';
+      if (semDadosCategoria) document.getElementById('avisoSemDadosCategoria').textContent = 'Nenhum produto encontrado com os filtros atuais.';
+
+      // altura dinâmica: mais categorias, mais espaço, pra não ficar espremido
+      document.getElementById('chartCategoria').height = Math.min(240, Math.max(140, entradas.length * 20));
+
+      const chartCategoriaExistente = Chart.getChart('chartCategoria');
+      if (chartCategoriaExistente) chartCategoriaExistente.destroy();
+      if (!semDadosCategoria) new Chart(document.getElementById('chartCategoria').getContext('2d'), {
+        type: 'bar',
+        data: { labels: entradas.map(([nome])=>nome), datasets: [{ data: entradas.map(([,v])=>v),
+          backgroundColor: entradas.map((_,i) => ['#2FE1A8','#4C8DFF','#F5A623','#FF5C5C','#8891A3','#9B7EDE','#22c093','#e2401c','#5B6472','#F5C542','#4dd0e1'][i % 11]),
+          borderRadius:4 }] },
+        options: {
+          indexAxis: 'y',
+          plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: (ctx) => moeda(ctx.parsed.x) } } },
+          scales:{ x:{ grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#8891A3', callback: v => moeda(v) } }, y:{ grid:{ display:false }, ticks:{ color:'#8891A3', font:{ size:11 } } } }
+        }
+      });
+    } catch (e) { console.error('Erro no gráfico de categoria:', e); }
+  }
+
+  window.__ajustar = async (id, nome, atualExibido) => {
+    const delta = prompt('Ajuste de estoque para "' + nome + '" (atual: ' + atualExibido + ').\nDigite a quantidade (use negativo para reduzir):', '0');
+    if (delta === null) return;
+    const motivo = prompt('Motivo do ajuste:');
+    if (!motivo){ mostrarToast('Informe o motivo.', 'erro'); return; }
+    try {
+      if (!(await checarPermissao('ESTOQUE','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      const produtoAtual = await dbGetById('PRODUTOS', id); // valor fresco, direto do banco
+      const novoEstoque = Number(produtoAtual.ESTOQUE_ATUAL||0) + Number(delta);
+      await dbUpdate('PRODUTOS', id, { ESTOQUE_ATUAL: novoEstoque });
+      await dbInsert('MOVIMENTOS_ESTOQUE', { PRODUTO_ID: id, TIPO:'AJUSTE_MANUAL', QUANTIDADE: Number(delta), MOTIVO: motivo, USUARIO_ID: usuarioAtual.ID, DATA: new Date().toISOString() });
+      mostrarToast('Estoque ajustado. Agora: ' + novoEstoque + ' unidades.');
+      carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  };
+
+  carregar();
+})();
+</script>

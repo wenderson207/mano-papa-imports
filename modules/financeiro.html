@@ -1,0 +1,404 @@
+<style>
+  .modal-overlay{ position:fixed; inset:0; background:rgba(3,5,8,0.6); display:none; align-items:center; justify-content:center; z-index:100; padding:24px; }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:14px; width:100%; max-width:480px; }
+  .modal-head{ display:flex; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--hairline); }
+  .modal-body{ padding:20px 22px; }
+  .modal-foot{ display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--hairline); }
+  .ffield{ margin-bottom:14px; }
+  .ffield label{ display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px; }
+  .ffield input, .ffield select{ width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; }
+  .frow2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .modal-close{ background:none; border:none; color:var(--text-tertiary); font-size:18px; cursor:pointer; }
+  .tabs{ display:flex; gap:4px; border-bottom:1px solid var(--hairline); margin-bottom:20px; flex-wrap:wrap; }
+  .tab{ padding:10px 14px; font-size:12.5px; color:var(--text-secondary); cursor:pointer; border-bottom:2px solid transparent; }
+  .tab.active{ color:var(--mint); border-color:var(--mint); }
+  .filtros{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:18px; }
+  .filtros label{ font-size:11px; color:var(--text-tertiary); display:block; margin-bottom:4px; }
+  .filtros input, .filtros select{ background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:8px 10px; border-radius:8px; font-size:12.5px; }
+  .chart-card{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; padding:18px 20px; }
+  .chart-grid{ display:grid; grid-template-columns:1.3fr 1fr; gap:16px; margin-bottom:16px; }
+  @media (max-width: 980px){ .chart-grid{ grid-template-columns:1fr; } }
+  .chart-card h4{ font-family:var(--font-display); font-size:14px; margin:0 0 4px; }
+  .chart-sub{ font-size:11px; color:var(--text-tertiary); margin:0 0 12px; }
+</style>
+
+<div class="toolbar">
+  <div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Financeiro</h1></div>
+  <button class="btn btn-primary" id="btnNovo">+ Novo lançamento</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="dashboard">📊 Dashboard</div>
+  <div class="tab" data-tab="pagar">Contas a pagar</div>
+  <div class="tab" data-tab="receber">Contas a receber</div>
+  <div class="tab" data-tab="historico">Histórico completo</div>
+  <div class="tab" data-tab="caixa">Caixa diário</div>
+</div>
+
+<div id="painelDashboard">
+  <div class="filtros">
+    <div><label>De</label><input type="date" id="filtroDe"></div>
+    <div><label>Até</label><input type="date" id="filtroAte"></div>
+    <div><label>Categoria</label><select id="filtroCategoriaFin"><option value="">Todas</option></select></div>
+    <div><label>&nbsp;</label><button class="btn" id="btnLimparFiltroFin" style="padding:8px 12px;">Limpar filtros</button></div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi"><div class="lbl">Entradas (no período)</div><div class="val" id="kpiEntradas">—</div></div>
+    <div class="kpi"><div class="lbl">Saídas (no período)</div><div class="val" id="kpiSaidas">—</div></div>
+    <div class="kpi"><div class="lbl">Saldo</div><div class="val" id="kpiSaldo">—</div></div>
+    <div class="kpi"><div class="lbl">Lançamentos</div><div class="val" id="kpiQtd">—</div></div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h4>Entradas x Saídas por dia</h4>
+      <p class="chart-sub">Soma diária dos lançamentos pagos, no período filtrado.</p>
+      <div id="avisoSemDadosDia" style="display:none; color:var(--text-tertiary); font-size:12.5px; padding:30px 0; text-align:center;"></div>
+      <canvas id="chartPorDia" height="150"></canvas>
+    </div>
+    <div class="chart-card">
+      <h4>Por categoria</h4>
+      <p class="chart-sub">Valor total (entradas + saídas) de cada categoria.</p>
+      <div id="avisoSemDadosCat" style="display:none; color:var(--text-tertiary); font-size:12.5px; padding:30px 0; text-align:center;"></div>
+      <canvas id="chartPorCategoria"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:16px;">
+    <h4>🕐 Por hora do dia</h4>
+    <p class="chart-sub">Em qual horário do dia mais entra e sai dinheiro — ajuda a ver o horário de pico.</p>
+    <div id="avisoSemDadosHora" style="display:none; color:var(--text-tertiary); font-size:12.5px; padding:30px 0; text-align:center;"></div>
+    <canvas id="chartPorHora" height="120"></canvas>
+  </div>
+</div>
+
+<div id="painelContas" style="display:none;">
+  <table class="dt"><thead><tr><th>Descrição</th><th>Categoria</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+    <tbody id="linhas"><tr class="empty-row"><td colspan="6">Carregando…</td></tr></tbody>
+  </table>
+</div>
+
+<div id="painelHistorico" style="display:none;">
+  <p style="color:var(--text-secondary); font-size:13px; margin:0 0 14px;">Todos os lançamentos (pagos e pendentes). Use pra limpar lançamento de teste que ficou perdido.</p>
+  <table class="dt"><thead><tr><th>Descrição</th><th>Categoria</th><th>Tipo</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+    <tbody id="linhasHistorico"><tr class="empty-row"><td colspan="6">Carregando…</td></tr></tbody>
+  </table>
+</div>
+
+<div id="painelCaixa" style="display:none;">
+  <div class="card" style="background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; padding:20px 22px;">
+    <p style="color:var(--text-secondary); font-size:13px; margin:0 0 16px;">Confere se o dinheiro que devia ter no caixa bate com o que tem de verdade, no fim do dia.</p>
+    <div id="caixaConteudo">Carregando…</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <div class="modal-head"><h3 style="font-family:var(--font-display); margin:0;">Novo lançamento</h3><button class="modal-close" id="fecharModal">✕</button></div>
+    <div class="modal-body">
+      <div class="ffield"><label>Tipo</label><select id="fTipo"><option value="Receita">Receita</option><option value="Despesa">Despesa</option></select></div>
+      <div class="frow2">
+        <div class="ffield"><label>Categoria</label><input id="fCategoria"></div>
+        <div class="ffield"><label>Valor (R$) *</label><input id="fValor" type="number" step="0.01"></div>
+      </div>
+      <div class="ffield"><label>Descrição</label><input id="fDescricao"></div>
+      <div class="ffield"><label>Vencimento</label><input id="fVencimento" type="date"></div>
+    </div>
+    <div class="modal-foot"><button class="btn" id="btnCancelar">Cancelar</button><button class="btn btn-primary" id="btnSalvar">Salvar</button></div>
+  </div>
+</div>
+
+<script>
+(async function(){
+  let todos = [], abaAtual = 'dashboard';
+  function moeda(v){ return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
+  function dataBR(v){ return v ? parseDataLocal(v).toLocaleDateString('pt-BR') : '—'; }
+
+  function tentarCarregarScript(src, timeoutMs){
+    return new Promise((resolve) => {
+      let resolvido = false;
+      const finalizar = (ok) => { if (!resolvido) { resolvido = true; resolve(ok); } };
+      const s = document.createElement('script');
+      s.src = src; s.onload = () => finalizar(true); s.onerror = () => finalizar(false);
+      document.head.appendChild(s);
+      setTimeout(() => finalizar(false), timeoutMs);
+    });
+  }
+  async function carregarChartJs(){
+    if (window.Chart) return;
+    const provedores = ['https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js', 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js'];
+    for (const url of provedores) { const ok = await tentarCarregarScript(url, 6000); if (ok && window.Chart) return; }
+    console.error('Não consegui carregar o Chart.js.');
+  }
+
+  async function carregar(){
+    try {
+      if (!(await checarPermissao('FINANCEIRO','VISUALIZAR'))){ setHTML('linhas', '<tr class="empty-row"><td colspan="6">Sem permissão.</td></tr>'); return; }
+      todos = await dbGetAll('FINANCEIRO');
+
+      const categorias = [...new Set(todos.map(l => l.CATEGORIA).filter(Boolean))];
+      setHTML('filtroCategoriaFin', '<option value="">Todas</option>' + categorias.map(c=>`<option value="${c}">${c}</option>`).join(''));
+
+      renderTudo();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  }
+
+  function lancamentosFiltrados(){
+    const de = document.getElementById('filtroDe').value;
+    const ate = document.getElementById('filtroAte').value;
+    const categoria = document.getElementById('filtroCategoriaFin').value;
+    return todos.filter(l => {
+      if (l.STATUS !== 'Pago') return false;
+      const dataRef = l.DATA_PAGAMENTO || l.DATA_VENCIMENTO;
+      if (!dataRef) return false;
+      const d = new Date(dataRef);
+      if (de && d < new Date(de + 'T00:00:00')) return false;
+      if (ate && d > new Date(ate + 'T23:59:59')) return false;
+      if (categoria && l.CATEGORIA !== categoria) return false;
+      return true;
+    });
+  }
+
+  function renderTudo(){
+    if (abaAtual === 'dashboard') { renderDashboard(); }
+    else if (abaAtual === 'caixa') { /* carregado à parte */ }
+    else if (abaAtual === 'historico') { renderHistoricoCompleto(); }
+    else { renderLista(); }
+  }
+
+  ['filtroDe','filtroAte','filtroCategoriaFin'].forEach(id => document.getElementById(id).addEventListener('change', renderDashboard));
+  document.getElementById('btnLimparFiltroFin').addEventListener('click', () => {
+    document.getElementById('filtroDe').value = ''; document.getElementById('filtroAte').value = ''; document.getElementById('filtroCategoriaFin').value = '';
+    renderDashboard();
+  });
+
+  // ---------- Dashboard ----------
+  function renderDashboard(){
+    const lista = lancamentosFiltrados();
+    const entradas = lista.filter(l=>l.TIPO==='Receita').reduce((s,l)=>s+Number(l.VALOR),0);
+    const saidas = lista.filter(l=>l.TIPO==='Despesa').reduce((s,l)=>s+Number(l.VALOR),0);
+    document.getElementById('kpiEntradas').textContent = moeda(entradas);
+    document.getElementById('kpiSaidas').textContent = moeda(saidas);
+    document.getElementById('kpiSaldo').textContent = moeda(entradas-saidas);
+    document.getElementById('kpiQtd').textContent = lista.length;
+    renderGraficos(lista);
+  }
+
+  async function renderGraficos(lista){
+    await carregarChartJs();
+    if (!window.Chart) { console.error('Chart.js não carregou.'); return; }
+
+    // ---------- Por dia ----------
+    try {
+      const porDia = {};
+      lista.forEach(l => {
+        const dia = new Date(l.DATA_PAGAMENTO||l.DATA_VENCIMENTO).toLocaleDateString('pt-BR');
+        if (!porDia[dia]) porDia[dia] = { receita:0, despesa:0, ts: new Date(l.DATA_PAGAMENTO||l.DATA_VENCIMENTO).getTime() };
+        porDia[dia][l.TIPO==='Receita'?'receita':'despesa'] += Number(l.VALOR);
+      });
+      const dias = Object.entries(porDia).sort((a,b)=>a[1].ts-b[1].ts);
+
+      const semDados1 = !dias.length;
+      document.getElementById('avisoSemDadosDia').style.display = semDados1 ? 'block' : 'none';
+      document.getElementById('chartPorDia').style.display = semDados1 ? 'none' : 'block';
+      if (semDados1) document.getElementById('avisoSemDadosDia').textContent = 'Nenhum lançamento pago no período selecionado.';
+
+      const chExistente = Chart.getChart('chartPorDia'); if (chExistente) chExistente.destroy();
+      if (!semDados1) new Chart(document.getElementById('chartPorDia').getContext('2d'), {
+        type: 'bar',
+        data: { labels: dias.map(([d])=>d), datasets: [
+          { label:'Entradas', data: dias.map(([,v])=>v.receita), backgroundColor:'rgba(47,225,168,0.75)', borderRadius:4 },
+          { label:'Saídas', data: dias.map(([,v])=>v.despesa), backgroundColor:'rgba(255,92,92,0.75)', borderRadius:4 }
+        ] },
+        options: { plugins:{ legend:{ labels:{ color:'#8891A3', font:{size:10.5} } }, tooltip:{ callbacks:{ label: c => c.dataset.label+': '+moeda(c.parsed.y) } } },
+          scales:{ x:{ grid:{display:false}, ticks:{ color:'#8891A3', maxRotation:45, minRotation:45 } }, y:{ grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#8891A3', callback:v=>moeda(v) } } } }
+      });
+    } catch(e) { console.error('Erro gráfico por dia:', e); }
+
+    // ---------- Por categoria ----------
+    try {
+      const porCat = {};
+      lista.forEach(l => { const cat = l.CATEGORIA || 'Sem categoria'; porCat[cat] = (porCat[cat]||0) + Number(l.VALOR); });
+      let entradas = Object.entries(porCat).sort((a,b)=>b[1]-a[1]);
+      const LIMITE = 8;
+      if (entradas.length > LIMITE) {
+        const principais = entradas.slice(0,LIMITE);
+        const outros = entradas.slice(LIMITE).reduce((s,[,v])=>s+v,0);
+        entradas = [...principais, ['Outras ('+(entradas.length-LIMITE)+')', outros]];
+      }
+      const semDados2 = !entradas.length;
+      document.getElementById('avisoSemDadosCat').style.display = semDados2 ? 'block' : 'none';
+      document.getElementById('chartPorCategoria').style.display = semDados2 ? 'none' : 'block';
+      if (semDados2) document.getElementById('avisoSemDadosCat').textContent = 'Nenhum lançamento no período selecionado.';
+      document.getElementById('chartPorCategoria').height = Math.min(240, Math.max(140, entradas.length*24));
+
+      const chExistente2 = Chart.getChart('chartPorCategoria'); if (chExistente2) chExistente2.destroy();
+      if (!semDados2) new Chart(document.getElementById('chartPorCategoria').getContext('2d'), {
+        type: 'bar',
+        data: { labels: entradas.map(([n])=>n), datasets:[{ data: entradas.map(([,v])=>v),
+          backgroundColor: entradas.map((_,i)=>['#2FE1A8','#4C8DFF','#F5A623','#FF5C5C','#9B7EDE','#22c093','#e2401c','#5B6472','#4dd0e1'][i%9]), borderRadius:4 }] },
+        options: { indexAxis:'y', plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: c => moeda(c.parsed.x) } } },
+          scales:{ x:{ grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#8891A3', callback:v=>moeda(v) } }, y:{ grid:{display:false}, ticks:{ color:'#8891A3', font:{size:11} } } } }
+      });
+    } catch(e) { console.error('Erro gráfico categoria:', e); }
+
+    // ---------- Por hora ----------
+    try {
+      const porHora = Array(24).fill(0).map(() => ({ receita:0, despesa:0 }));
+      lista.forEach(l => {
+        const h = new Date(l.DATA_PAGAMENTO||l.DATA_VENCIMENTO).getHours();
+        porHora[h][l.TIPO==='Receita'?'receita':'despesa'] += Number(l.VALOR);
+      });
+      const semDados3 = !lista.length;
+      document.getElementById('avisoSemDadosHora').style.display = semDados3 ? 'block' : 'none';
+      document.getElementById('chartPorHora').style.display = semDados3 ? 'none' : 'block';
+      if (semDados3) document.getElementById('avisoSemDadosHora').textContent = 'Nenhum lançamento no período selecionado.';
+
+      const chExistente3 = Chart.getChart('chartPorHora'); if (chExistente3) chExistente3.destroy();
+      if (!semDados3) new Chart(document.getElementById('chartPorHora').getContext('2d'), {
+        type: 'bar',
+        data: { labels: porHora.map((_,h)=>h+'h'), datasets:[
+          { label:'Entradas', data: porHora.map(h=>h.receita), backgroundColor:'rgba(47,225,168,0.75)', borderRadius:3 },
+          { label:'Saídas', data: porHora.map(h=>h.despesa), backgroundColor:'rgba(255,92,92,0.75)', borderRadius:3 }
+        ] },
+        options: { plugins:{ legend:{ labels:{ color:'#8891A3', font:{size:10.5} } }, tooltip:{ callbacks:{ label: c => c.dataset.label+': '+moeda(c.parsed.y) } } },
+          scales:{ x:{ grid:{display:false}, ticks:{ color:'#8891A3', font:{size:10} } }, y:{ grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#8891A3', callback:v=>moeda(v) } } } }
+      });
+    } catch(e) { console.error('Erro gráfico por hora:', e); }
+  }
+
+  function renderLista(){
+    const tipo = abaAtual === 'pagar' ? 'Despesa' : 'Receita';
+    const lista = todos.filter(l => l.TIPO === tipo && l.STATUS !== 'Pago');
+    setHTML('linhas', lista.length ? lista.map(l => `<tr>
+      <td>${l.DESCRICAO||'—'}</td><td>${l.CATEGORIA||'—'}</td><td>${dataBR(l.DATA_VENCIMENTO)}</td><td>${moeda(l.VALOR)}</td>
+      <td><span class="badge warn">Pendente</span></td>
+      <td><button class="btn" style="padding:6px 10px;font-size:11.5px;" onclick="window.__baixar('${l.ID}')">Dar baixa</button></td></tr>`).join('')
+      : '<tr class="empty-row"><td colspan="6">Nada por aqui.</td></tr>');
+  }
+
+  document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); tab.classList.add('active');
+    abaAtual = tab.dataset.tab;
+    document.getElementById('painelDashboard').style.display = abaAtual==='dashboard' ? 'block' : 'none';
+    document.getElementById('painelContas').style.display = abaAtual==='pagar'||abaAtual==='receber' ? 'block' : 'none';
+    document.getElementById('painelHistorico').style.display = abaAtual === 'historico' ? 'block' : 'none';
+    document.getElementById('painelCaixa').style.display = abaAtual === 'caixa' ? 'block' : 'none';
+    if (abaAtual === 'caixa') carregarCaixa();
+    else renderTudo();
+  }));
+
+  function renderHistoricoCompleto(){
+    const ordenado = todos.slice().sort((a,b) => new Date(b.DATA_PAGAMENTO||b.DATA_VENCIMENTO||0) - new Date(a.DATA_PAGAMENTO||a.DATA_VENCIMENTO||0));
+    setHTML('linhasHistorico', ordenado.length ? ordenado.map(l => `<tr>
+      <td>${l.DESCRICAO||'—'}</td><td>${l.CATEGORIA||'—'}</td><td>${l.TIPO}</td><td>${moeda(l.VALOR)}</td>
+      <td><span class="badge ${l.STATUS==='Pago'?'ok':'warn'}">${l.STATUS}</span></td>
+      <td><button class="btn" style="padding:6px 10px; font-size:11.5px; color:var(--red);" onclick="window.__excluirLancamento('${l.ID}')">Excluir</button></td></tr>`).join('')
+      : '<tr class="empty-row"><td colspan="6">Nenhum lançamento ainda.</td></tr>');
+  }
+
+  window.__excluirLancamento = async (id) => {
+    if (!confirm('Excluir este lançamento? Isso não desfaz nenhuma venda/compra — só remove o registro financeiro.')) return;
+    try {
+      if (!(await checarPermissao('FINANCEIRO','EXCLUIR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      await dbDelete('FINANCEIRO', id);
+      mostrarToast('Lançamento excluído.');
+      carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  };
+
+  // ---------- Caixa diário ----------
+  function chaveDoDiaCaixa(lojaId){ return (lojaId||'sem-loja') + '_' + new Date().toISOString().substring(0,10); }
+
+  async function carregarCaixa(){
+    const el = document.getElementById('caixaConteudo');
+    try {
+      if (!(await checarPermissao('FINANCEIRO','VISUALIZAR'))){ el.textContent = 'Sem permissão.'; return; }
+      const lojaId = window.lojaAtivaId || await obterLojaParaAcao('Caixa de qual loja você quer conferir?');
+      if (!lojaId) { el.textContent = 'Escolha uma loja pra ver o caixa.'; return; }
+      const idDia = chaveDoDiaCaixa(lojaId);
+      const caixaHoje = await dbGetById('CAIXA', idDia);
+
+      if (!caixaHoje || caixaHoje.STATUS === 'Fechado') {
+        el.innerHTML = `
+          <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">${caixaHoje ? 'Caixa de hoje já foi fechado. Você pode abrir de novo se precisar lançar algo a mais.' : 'Caixa de hoje ainda não foi aberto.'}</p>
+          <div class="frow2" style="max-width:400px;">
+            <div class="ffield"><label>Valor inicial em caixa (R$)</label><input id="valorAbertura" type="number" step="0.01" value="0"></div>
+          </div>
+          <button class="btn btn-primary" id="btnAbrirCaixa">Abrir caixa</button>`;
+        document.getElementById('btnAbrirCaixa').addEventListener('click', async () => {
+          try {
+            if (!(await checarPermissao('FINANCEIRO','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+            await dbInsert('CAIXA', { ID: idDia, EMPRESA_ID: lojaId, DATA: new Date().toISOString(), VALOR_ABERTURA: Number(document.getElementById('valorAbertura').value)||0, STATUS: 'Aberto', USUARIO_ABERTURA: usuarioAtual.ID });
+            mostrarToast('Caixa aberto.'); carregarCaixa();
+          } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+        });
+        return;
+      }
+
+      const vendasHoje = (await dbGetAll('VENDAS')).filter(v => v.EMPRESA_ID === lojaId && v.STATUS === 'Concluída' && new Date(v.DATA).toDateString() === new Date().toDateString());
+      const dinheiroHoje = vendasHoje.filter(v => v.FORMA_PAGAMENTO === 'Dinheiro').reduce((s,v)=>s+Number(v.VALOR_TOTAL||0),0);
+      const outrasFormasHoje = vendasHoje.filter(v => v.FORMA_PAGAMENTO !== 'Dinheiro').reduce((s,v)=>s+Number(v.VALOR_TOTAL||0),0);
+      const esperadoEmCaixa = Number(caixaHoje.VALOR_ABERTURA||0) + dinheiroHoje;
+
+      el.innerHTML = `
+        <div class="kpi-grid" style="margin-bottom:18px;">
+          <div class="kpi"><div class="lbl">Abertura</div><div class="val">${moeda(caixaHoje.VALOR_ABERTURA)}</div></div>
+          <div class="kpi"><div class="lbl">Vendas em dinheiro hoje</div><div class="val">${moeda(dinheiroHoje)}</div></div>
+          <div class="kpi"><div class="lbl">Outras formas (cartão/PIX)</div><div class="val">${moeda(outrasFormasHoje)}</div></div>
+          <div class="kpi"><div class="lbl">Esperado em caixa (dinheiro)</div><div class="val">${moeda(esperadoEmCaixa)}</div></div>
+        </div>
+        <div class="frow2" style="max-width:400px;">
+          <div class="ffield"><label>Valor contado ao fechar (R$)</label><input id="valorContado" type="number" step="0.01"></div>
+        </div>
+        <button class="btn btn-primary" id="btnFecharCaixa">Fechar caixa</button>
+        <div id="resultadoFechamento" style="margin-top:14px; font-size:13px;"></div>`;
+
+      document.getElementById('btnFecharCaixa').addEventListener('click', async () => {
+        const contado = Number(document.getElementById('valorContado').value);
+        if (isNaN(contado)){ mostrarToast('Informe o valor contado.', 'erro'); return; }
+        const diferenca = contado - esperadoEmCaixa;
+        try {
+          if (!(await checarPermissao('FINANCEIRO','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+          await dbUpdate('CAIXA', idDia, { STATUS: 'Fechado', VALOR_ESPERADO: esperadoEmCaixa, VALOR_CONTADO: contado, DIFERENCA: diferenca, USUARIO_FECHAMENTO: usuarioAtual.ID, DATA_FECHAMENTO: new Date().toISOString() });
+          const cor = diferenca === 0 ? 'var(--mint)' : (diferenca > 0 ? 'var(--blue)' : 'var(--red)');
+          const texto = diferenca === 0 ? 'Caixa bateu certinho! 🎉' : (diferenca > 0 ? `Sobrou ${moeda(diferenca)} no caixa.` : `Faltou ${moeda(Math.abs(diferenca))} no caixa.`);
+          setHTML('resultadoFechamento', `<b style="color:${cor};">${texto}</b>`);
+          mostrarToast('Caixa fechado.');
+        } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+      });
+    } catch (e) { el.textContent = 'Erro: ' + e.message; }
+  }
+
+  window.__baixar = async (id) => {
+    try {
+      if (!(await checarPermissao('FINANCEIRO','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      await dbUpdate('FINANCEIRO', id, { STATUS: 'Pago', DATA_PAGAMENTO: new Date().toISOString() });
+      mostrarToast('Baixa registrada.'); carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  };
+
+  const modal = document.getElementById('modal');
+  document.getElementById('btnNovo').addEventListener('click', () => modal.classList.add('open'));
+  document.getElementById('fecharModal').addEventListener('click', () => modal.classList.remove('open'));
+  document.getElementById('btnCancelar').addEventListener('click', () => modal.classList.remove('open'));
+
+  document.getElementById('btnSalvar').addEventListener('click', async () => {
+    const valor = Number(document.getElementById('fValor').value) || 0;
+    if (!valor){ mostrarToast('Informe o valor.', 'erro'); return; }
+    try {
+      if (!(await checarPermissao('FINANCEIRO','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      await dbInsert('FINANCEIRO', {
+        TIPO: document.getElementById('fTipo').value, CATEGORIA: document.getElementById('fCategoria').value.trim(),
+        VALOR: valor, DESCRICAO: document.getElementById('fDescricao').value.trim(),
+        DATA_VENCIMENTO: document.getElementById('fVencimento').value, STATUS: 'Pendente'
+      });
+      mostrarToast('Lançamento registrado.'); modal.classList.remove('open'); carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  carregar();
+})();
+</script>

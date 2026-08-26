@@ -1,0 +1,142 @@
+rules_version = '2';
+
+// =============================================================
+// Regras de Segurança do Firestore — BStyle ERP
+//
+// Isso é o que garante a permissão DE VERDADE. Ao contrário de "esconder
+// um botão na tela", estas regras são aplicadas pelo próprio servidor do
+// Firestore — mesmo que alguém tente chamar a API diretamente pulando o
+// site, essas regras continuam valendo.
+//
+// CONVENÇÃO IMPORTANTE: os documentos da coleção PERMISSOES devem ser
+// criados com ID = PERFIL_ID + "_" + MODULO (ex.: "PRF-ABC123_CLIENTES").
+// O seed.html já faz isso automaticamente — só importa se você for criar
+// permissões manualmente pelo Console do Firebase.
+//
+// Como aplicar: Console do Firebase → Firestore Database → Regras →
+// cole este conteúdo inteiro → Publicar.
+// =============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function estaLogado() {
+      return request.auth != null;
+    }
+
+    // Enquanto o setup inicial não foi concluído, algumas escritas de
+    // bootstrap (perfis, permissões, o primeiro usuário) são liberadas pra
+    // qualquer pessoa logada — porque, nesse momento, ainda não existe
+    // nenhum Administrador cadastrado para autorizar nada. Depois que o
+    // seed.html termina, ele marca CONFIG/setup_concluido, e a partir daí
+    // essas mesmas escritas passam a exigir ser Administrador de verdade.
+    function setupJaFeito() {
+      return exists(/databases/$(database)/documents/CONFIG/setup_concluido);
+    }
+
+    function meuUsuarioExiste() {
+      return exists(/databases/$(database)/documents/USUARIOS/$(request.auth.uid));
+    }
+
+    function meuUsuario() {
+      return get(/databases/$(database)/documents/USUARIOS/$(request.auth.uid)).data;
+    }
+
+    function meuPerfilId() {
+      return get(/databases/$(database)/documents/USUARIOS/$(request.auth.uid)).data.PERFIL_ID;
+    }
+
+    function souAdministrador() {
+      return meuUsuarioExiste()
+        && exists(/databases/$(database)/documents/PERFIS/$(meuPerfilId()))
+        && get(/databases/$(database)/documents/PERFIS/$(meuPerfilId())).data.NOME == 'Administrador';
+    }
+
+    function temPermissao(modulo, acao) {
+      return meuUsuarioExiste()
+        && exists(/databases/$(database)/documents/PERMISSOES/$(meuPerfilId() + '_' + modulo))
+        && get(/databases/$(database)/documents/PERMISSOES/$(meuPerfilId() + '_' + modulo)).data[acao] == true;
+    }
+
+    function podeVer(modulo)      { return estaLogado() && (souAdministrador() || temPermissao(modulo, 'VISUALIZAR')); }
+    function podeCadastrar(modulo){ return estaLogado() && (souAdministrador() || temPermissao(modulo, 'CADASTRAR')); }
+    function podeEditar(modulo)   { return estaLogado() && (souAdministrador() || temPermissao(modulo, 'EDITAR')); }
+    function podeExcluir(modulo)  { return estaLogado() && (souAdministrador() || temPermissao(modulo, 'EXCLUIR')); }
+
+    // ---------- Autenticação / estrutura do sistema ----------
+    // Qualquer pessoa logada pode LER usuários/perfis/permissões (precisa
+    // pra saber o próprio perfil e navegar o menu); só Administrador escreve.
+    match /USUARIOS/{id} {
+      allow read: if estaLogado();
+      allow create: if estaLogado() && ( (!setupJaFeito() && request.auth.uid == id) || souAdministrador() );
+      allow update, delete: if estaLogado() && souAdministrador();
+    }
+    match /PERFIS/{id} {
+      allow read: if estaLogado();
+      allow create: if estaLogado() && (!setupJaFeito() || souAdministrador());
+      allow update, delete: if estaLogado() && souAdministrador();
+    }
+    match /PERMISSOES/{id} {
+      allow read: if estaLogado();
+      allow create: if estaLogado() && (!setupJaFeito() || souAdministrador());
+      allow update, delete: if estaLogado() && souAdministrador();
+    }
+    match /SESSOES/{id} { allow read, write: if estaLogado(); }
+    match /RECUPERACAO_SENHA/{id} { allow read, write: if false; } // fluxo do Firebase Auth cuida disso, não precisa mais
+
+    // ---------- Cadastros ----------
+    match /EMPRESAS/{id} {
+      allow read: if podeVer('EMPRESAS');
+      allow create: if podeCadastrar('EMPRESAS');
+      allow update: if podeEditar('EMPRESAS');
+      allow delete: if podeExcluir('EMPRESAS');
+    }
+    match /CLIENTES/{id} {
+      allow read: if podeVer('CLIENTES');
+      allow create: if podeCadastrar('CLIENTES');
+      allow update: if podeEditar('CLIENTES');
+      allow delete: if podeExcluir('CLIENTES');
+    }
+    match /PRODUTOS/{id} {
+      allow read: if podeVer('PRODUTOS');
+      allow create: if podeCadastrar('PRODUTOS');
+      allow update: if podeEditar('PRODUTOS');
+      allow delete: if podeExcluir('PRODUTOS');
+    }
+    match /CATEGORIAS/{id} { allow read: if estaLogado(); allow write: if podeEditar('PRODUTOS'); }
+    match /MARCAS/{id} { allow read: if estaLogado(); allow write: if podeEditar('PRODUTOS'); }
+    match /MODELOS_APARELHOS/{id} { allow read: if estaLogado(); allow write: if podeEditar('PRODUTOS'); }
+    match /FORNECEDORES/{id} {
+      allow read: if podeVer('FORNECEDORES');
+      allow create: if podeCadastrar('FORNECEDORES');
+      allow update: if podeEditar('FORNECEDORES');
+      allow delete: if podeExcluir('FORNECEDORES');
+    }
+
+    // ---------- Operação ----------
+    match /ESTOQUE/{id} { allow read: if podeVer('ESTOQUE'); allow write: if podeEditar('ESTOQUE'); }
+    match /MOVIMENTOS_ESTOQUE/{id} { allow read: if podeVer('ESTOQUE'); allow create: if podeEditar('ESTOQUE'); allow update, delete: if false; }
+    match /COMPRAS/{id} { allow read: if podeVer('COMPRAS'); allow create: if podeCadastrar('COMPRAS'); allow update, delete: if podeEditar('COMPRAS'); }
+    match /ITENS_COMPRA/{id} { allow read: if podeVer('COMPRAS'); allow create: if podeCadastrar('COMPRAS'); allow update, delete: if false; }
+    match /VENDAS/{id} { allow read: if podeVer('VENDAS'); allow create: if podeCadastrar('VENDAS'); allow update: if podeEditar('VENDAS'); allow delete: if podeExcluir('VENDAS'); }
+    match /ITENS_VENDA/{id} { allow read: if podeVer('VENDAS'); allow create: if podeCadastrar('VENDAS'); allow update: if false; allow delete: if podeExcluir('VENDAS'); }
+    match /ORCAMENTOS/{id} { allow read: if podeVer('ORCAMENTOS'); allow create: if podeCadastrar('ORCAMENTOS'); allow update: if podeEditar('ORCAMENTOS'); allow delete: if podeExcluir('ORCAMENTOS'); }
+    match /ITENS_ORCAMENTO/{id} { allow read: if podeVer('ORCAMENTOS'); allow create: if podeCadastrar('ORCAMENTOS'); allow update, delete: if false; }
+    match /ASSISTENCIAS/{id} { allow read: if podeVer('ASSISTENCIA'); allow create: if podeCadastrar('ASSISTENCIA'); allow update: if podeEditar('ASSISTENCIA'); allow delete: if podeExcluir('ASSISTENCIA'); }
+    match /GARANTIAS/{id} { allow read: if podeVer('GARANTIAS'); allow create: if podeCadastrar('GARANTIAS'); allow update: if podeEditar('GARANTIAS'); allow delete: if podeExcluir('GARANTIAS'); }
+
+    // ---------- Gestão ----------
+    match /FINANCEIRO/{id} { allow read: if podeVer('FINANCEIRO'); allow create: if podeCadastrar('FINANCEIRO'); allow update: if podeEditar('FINANCEIRO'); allow delete: if podeExcluir('FINANCEIRO'); }
+    match /CAIXA/{id} { allow read: if podeVer('FINANCEIRO'); allow create: if podeCadastrar('FINANCEIRO'); allow update, delete: if false; }
+    match /RELATORIOS_CACHE/{id} { allow read, write: if podeVer('RELATORIOS'); }
+    match /CONFIG/{id} { allow read: if estaLogado(); allow write: if podeEditar('CONFIGURACOES'); }
+    match /BACKUP/{id} { allow read: if podeVer('CONFIGURACOES'); allow create: if podeEditar('CONFIGURACOES'); allow update, delete: if false; }
+    match /LOGS/{id} { allow read: if souAdministrador(); allow create: if estaLogado(); allow update, delete: if false; }
+
+    // Qualquer coleção não listada acima: bloqueada por padrão (mais seguro
+    // negar por engano do que liberar por engano).
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

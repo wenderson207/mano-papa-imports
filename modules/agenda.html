@@ -1,0 +1,112 @@
+<style>
+  .notif-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin-bottom:20px; }
+  .notif-card{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; padding:16px 18px; }
+  .notif-card.urgente{ border-color:rgba(255,92,92,0.4); background:rgba(255,92,92,0.05); }
+  .notif-card.atencao{ border-color:rgba(245,166,35,0.4); background:rgba(245,166,35,0.05); }
+  .notif-card .num{ font-family:var(--font-display); font-size:26px; font-weight:700; }
+  .notif-card .lbl{ font-size:12px; color:var(--text-secondary); margin-top:4px; }
+
+  .agenda-lista{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; overflow:hidden; }
+  .agenda-item{ display:flex; align-items:center; gap:14px; padding:14px 18px; border-bottom:1px solid var(--hairline); }
+  .agenda-item:last-child{ border-bottom:none; }
+  .agenda-item .data-badge{ min-width:56px; text-align:center; background:var(--bg-elevated); border-radius:8px; padding:6px 8px; font-family:var(--font-mono); }
+  .agenda-item .data-badge .dia{ font-size:16px; font-weight:700; color:var(--mint); }
+  .agenda-item .data-badge .mes{ font-size:9.5px; color:var(--text-tertiary); text-transform:uppercase; }
+  .agenda-item.atrasado .data-badge .dia{ color:var(--red); }
+  .agenda-item .info{ flex:1; }
+  .garantia-item{ display:flex; align-items:center; gap:14px; padding:14px 18px; border-bottom:1px solid var(--hairline); }
+  .garantia-item:last-child{ border-bottom:none; }
+  .section-subtitulo{ font-family:var(--font-display); font-size:15px; margin:26px 0 12px; }
+</style>
+
+<div class="toolbar"><div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Agenda</h1>
+<p style="color:var(--text-secondary); font-size:13px; margin:0;">Aparelhos com entrega planejada — organizados por urgência.</p></div></div>
+
+<div class="notif-grid" id="notifGrid"></div>
+
+<div class="agenda-lista" id="agendaLista"></div>
+
+<h3 class="section-subtitulo">⏳ Garantias perto de vencer (oportunidade de contato)</h3>
+<div class="agenda-lista" id="listaGarantiasVencendo"></div>
+
+<script>
+(async function(){
+  function nomeCliente(id, clientes){ const c = clientes.find(x=>x.ID===id); return c?c.NOME:'—'; }
+
+  try {
+    if (!(await checarPermissao('ASSISTENCIA','VISUALIZAR'))){ setHTML('agendaLista', 'Sem permissão.'); return; }
+
+    const [ordens, clientes] = await Promise.all([dbGetAll('ASSISTENCIAS'), dbGetAll('CLIENTES')]);
+    const pendentes = ordens.filter(o => o.STATUS !== 'Entregue' && o.PRAZO);
+
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const atrasados = pendentes.filter(o => parseDataLocal(o.PRAZO) < hoje);
+    const hojeEntrega = pendentes.filter(o => parseDataLocal(o.PRAZO).toDateString() === new Date().toDateString());
+    const amanha = new Date(hoje); amanha.setDate(amanha.getDate()+1);
+    const proximos7 = pendentes.filter(o => { const p = parseDataLocal(o.PRAZO); return p >= amanha && p <= new Date(hoje.getTime()+7*86400000); });
+
+    setHTML('notifGrid', `
+      <div class="notif-card urgente"><div class="num">${atrasados.length}</div><div class="lbl">Atrasados — já deveriam ter sido entregues</div></div>
+      <div class="notif-card atencao"><div class="num">${hojeEntrega.length}</div><div class="lbl">Pra entregar hoje</div></div>
+      <div class="notif-card"><div class="num">${proximos7.length}</div><div class="lbl">Nos próximos 7 dias</div></div>
+      <div class="notif-card"><div class="num">${pendentes.length}</div><div class="lbl">Total de aparelhos em aberto com prazo</div></div>
+    `);
+
+    const ordenados = pendentes.slice().sort((a,b) => parseDataLocal(a.PRAZO) - parseDataLocal(b.PRAZO));
+
+    setHTML('agendaLista', ordenados.length ? ordenados.map(o => {
+      const dataEntrega = parseDataLocal(o.PRAZO);
+      const atrasado = dataEntrega < hoje;
+      return `<div class="agenda-item ${atrasado?'atrasado':''}">
+        <div class="data-badge"><div class="dia">${String(dataEntrega.getDate()).padStart(2,'0')}</div><div class="mes">${dataEntrega.toLocaleDateString('pt-BR',{month:'short'})}</div></div>
+        <div class="info">
+          <div class="num-os">${o.NUMERO_OS}</div>
+          <div><b>${nomeCliente(o.CLIENTE_ID, clientes)}</b> — ${o.MARCA||''} ${o.MODELO||''}</div>
+          <div style="color:var(--text-tertiary); font-size:11.5px;">${o.DEFEITO_INFORMADO||''}</div>
+        </div>
+        <span class="badge ${atrasado?'danger':'info'}" style="display:inline-flex; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600; font-family:var(--font-mono); background:${atrasado?'rgba(255,92,92,0.12)':'rgba(76,141,255,0.12)'}; color:${atrasado?'#FF5C5C':'#4C8DFF'};">${o.STATUS}</span>
+      </div>`;
+    }).join('') : '<div style="padding:40px; text-align:center; color:var(--text-tertiary);">Nenhum aparelho com entrega planejada.</div>');
+
+  } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+
+  // ---------- Garantias perto de vencer ----------
+  try {
+    if (!(await checarPermissao('GARANTIAS','VISUALIZAR'))){ setHTML('listaGarantiasVencendo', 'Sem permissão.'); return; }
+    const [garantias, clientesGar] = await Promise.all([dbGetAll('GARANTIAS'), dbGetAll('CLIENTES')]);
+    const hoje = new Date();
+
+    function dataVencimento(g){
+      const base = g.TIPO === 'MANUTENCAO' ? (g.DATA_CONCLUSAO || g.DATA_EMISSAO) : g.DATA_EMISSAO;
+      const d = new Date(base);
+      d.setDate(d.getDate() + Number(g.PRAZO_DIAS||0));
+      return d;
+    }
+
+    const vencendo = garantias
+      .filter(g => g.STATUS === 'Ativa')
+      .map(g => ({ ...g, _vencimento: dataVencimento(g) }))
+      .filter(g => { const dias = (g._vencimento - hoje) / 86400000; return dias >= 0 && dias <= 15; })
+      .sort((a,b) => a._vencimento - b._vencimento);
+
+    function nomeClienteGar(id){ const c = clientesGar.find(x=>x.ID===id); return c?c.NOME:'—'; }
+    function telefoneCliente(id){ const c = clientesGar.find(x=>x.ID===id); return c?c.TELEFONE:''; }
+
+    setHTML('listaGarantiasVencendo', vencendo.length ? vencendo.map(g => {
+      const diasRestantes = Math.ceil((g._vencimento - hoje) / 86400000);
+      const telefone = String(telefoneCliente(g.CLIENTE_ID)||'').replace(/\D/g,'');
+      const numeroComPais = telefone ? (telefone.length<=11 ? '55'+telefone : telefone) : '';
+      const msg = encodeURIComponent(`Olá, ${nomeClienteGar(g.CLIENTE_ID)}! Passando para lembrar que a garantia do seu ${g.PRODUTO_DESCRICAO||'aparelho'} (${g.NUMERO_GARANTIA}) vence em ${diasRestantes} dia(s). Qualquer problema, é só nos procurar!`);
+      return `<div class="garantia-item">
+        <div style="flex:1;">
+          <div class="num-os" style="font-family:var(--font-mono); color:var(--blue); font-size:11.5px;">${g.NUMERO_GARANTIA}</div>
+          <div><b>${nomeClienteGar(g.CLIENTE_ID)}</b> — ${g.PRODUTO_DESCRICAO||''}</div>
+        </div>
+        <span class="badge" style="background:rgba(245,166,35,0.12); color:var(--amber); padding:3px 9px; border-radius:20px; font-size:11px; font-family:var(--font-mono);">vence em ${diasRestantes}d</span>
+        ${numeroComPais ? `<a class="btn" style="padding:6px 10px; font-size:11.5px; text-decoration:none;" href="https://wa.me/${numeroComPais}?text=${msg}" target="_blank">💬 WhatsApp</a>` : ''}
+      </div>`;
+    }).join('') : '<div style="padding:30px; text-align:center; color:var(--text-tertiary);">Nenhuma garantia vencendo nos próximos 15 dias.</div>');
+
+  } catch (e) { mostrarToast('Erro ao carregar garantias: ' + e.message, 'erro'); }
+})();
+</script>

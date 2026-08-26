@@ -1,0 +1,655 @@
+<style>
+  .modal-overlay{ position:fixed; inset:0; background:rgba(3,5,8,0.6); display:none; align-items:center; justify-content:center; z-index:100; padding:24px; }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:14px; width:100%; max-width:560px; max-height:90vh; overflow-y:auto; }
+  .modal-head{ display:flex; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--hairline); position:sticky; top:0; background:var(--bg-surface); }
+  .modal-body{ padding:20px 22px; }
+  .modal-foot{ display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--hairline); flex-wrap:wrap; }
+  .ffield{ margin-bottom:14px; position:relative; }
+  .ffield label{ display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px; }
+  .ffield input, .ffield select, .ffield textarea{ width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; font-family:inherit; }
+  .frow2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .frow3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  .modal-close{ background:none; border:none; color:var(--text-tertiary); font-size:18px; cursor:pointer; }
+  .badge{ display:inline-flex; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600; font-family:var(--font-mono); }
+  .badge.ok{ background:rgba(47,225,168,0.12); color:var(--mint); }
+  .badge.info{ background:rgba(76,141,255,0.12); color:var(--blue); }
+  .badge.warn{ background:rgba(245,166,35,0.12); color:var(--amber); }
+
+  .tabs{ display:flex; gap:4px; border-bottom:1px solid var(--hairline); margin-bottom:20px; }
+  .tab{ padding:10px 14px; font-size:12.5px; color:var(--text-secondary); cursor:pointer; border-bottom:2px solid transparent; }
+  .tab.active{ color:var(--mint); border-color:var(--mint); }
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; }
+
+  .pdv-grid{ display:grid; grid-template-columns: 1.5fr 1fr; gap:18px; align-items:start; }
+  @media (max-width: 980px){ .pdv-grid{ grid-template-columns:1fr; } }
+  .card{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; padding:18px 20px; }
+  .dropdown-results{ position:absolute; top:calc(100% + 6px); left:0; right:0; background:var(--bg-elevated); border:1px solid var(--hairline);
+    border-radius:10px; max-height:240px; overflow-y:auto; z-index:15; display:none; }
+  .dropdown-results.open{ display:block; }
+  .dropdown-results .opt{ padding:10px 12px; font-size:12.5px; cursor:pointer; border-bottom:1px solid var(--hairline); }
+  .dropdown-results .opt:hover{ background:var(--bg-surface); }
+  .summary-row{ display:flex; justify-content:space-between; font-size:12.5px; color:var(--text-secondary); padding:5px 0; }
+  .summary-row.total{ font-size:16px; color:var(--text-primary); font-weight:700; font-family:var(--font-display); border-top:1px solid var(--hairline); margin-top:8px; padding-top:12px; }
+  .selected-client{ display:flex; align-items:center; justify-content:space-between; background:var(--bg-elevated); border:1px solid var(--hairline); border-radius:8px; padding:9px 12px; font-size:12.5px; }
+  .selected-client button{ background:none; border:none; color:var(--text-tertiary); cursor:pointer; }
+</style>
+
+<div class="toolbar">
+  <div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Celulares</h1>
+  <p style="color:var(--text-secondary); font-size:13px; margin:0;">Cadastro, estoque e venda de aparelhos (novos e usados).</p></div>
+  <button class="btn btn-primary" id="btnNovo">+ Novo aparelho</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="estoque">Estoque de celulares</div>
+  <div class="tab" data-tab="vender">Vender celular</div>
+</div>
+
+<!-- ===================== ABA: ESTOQUE / CADASTRO ===================== -->
+<div id="painelEstoque" class="tab-panel active">
+  <div style="margin-bottom:14px;">
+    <input id="busca" placeholder="Buscar por marca, modelo ou IMEI…" style="width:100%; max-width:340px; background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;">
+  </div>
+  <table class="dt">
+    <thead><tr><th>Marca/Modelo</th><th>Cor/Memória</th><th>Tipo</th><th>IMEI</th><th>Compra</th><th>Venda</th><th>Estoque</th><th></th></tr></thead>
+    <tbody id="linhas"><tr class="empty-row"><td colspan="8">Carregando…</td></tr></tbody>
+  </table>
+</div>
+
+<!-- ===================== ABA: VENDER ===================== -->
+<div id="painelVender" class="tab-panel">
+  <div class="pdv-grid">
+    <div class="card">
+      <div class="ffield">
+        <label>Buscar aparelho em estoque (marca, modelo ou IMEI)</label>
+        <input id="buscaAparelhoVenda" placeholder="Digite para buscar…" autocomplete="off">
+        <div class="dropdown-results" id="resultadosAparelho"></div>
+      </div>
+      <table class="dt" style="margin-top:16px;">
+        <thead><tr><th>Aparelho</th><th style="width:90px;">Preço</th><th></th></tr></thead>
+        <tbody id="carrinhoVenda"><tr class="empty-row"><td colspan="3">Nenhum aparelho selecionado.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="ffield">
+        <label>Cliente *</label>
+        <div id="clienteSelecionadoWrap" style="display:none; margin-bottom:8px;">
+          <div class="selected-client"><span id="clienteSelecionadoNome"></span><button id="btnRemoverClienteVenda">trocar</button></div>
+          <div id="avisoFidelidadeVenda" style="display:none; margin-top:8px; padding:8px 10px; border-radius:8px; background:rgba(47,225,168,0.1); border:1px solid rgba(47,225,168,0.3); font-size:12px;"></div>
+        </div>
+        <input id="buscaClienteVenda" placeholder="Buscar cliente… (obrigatório p/ gerar garantia)" autocomplete="off">
+        <div class="dropdown-results" id="resultadosClienteVenda"></div>
+      </div>
+      <div class="ffield"><label>Forma de pagamento</label>
+        <select id="formaPagamentoVenda"><option>PIX</option><option>Cartão de Crédito</option><option>Cartão de Débito</option><option>Dinheiro</option><option>Parcelado</option></select>
+      </div>
+      <div class="ffield" id="parcelasWrapVenda" style="display:none;"><label>Parcelas</label><input id="parcelasVenda" type="number" min="1" max="12" value="1"></div>
+      <div class="ffield" id="dinheiroWrapVenda" style="display:none;">
+        <label>Valor recebido do cliente (R$)</label><input id="valorRecebidoVenda" type="number" step="0.01">
+        <div id="trocoInfoVenda" style="margin-top:8px; font-size:12.5px; font-family:var(--font-mono);"></div>
+      </div>
+      <div class="ffield"><label>Desconto (R$)</label><input id="descontoVenda" type="number" step="0.01" value="0"></div>
+
+      <div class="summary-row"><span>Subtotal</span><span id="resSubtotalVenda">R$ 0,00</span></div>
+      <div class="summary-row"><span>Desconto</span><span id="resDescontoVenda">R$ 0,00</span></div>
+      <div class="summary-row total"><span>Total</span><span id="resTotalVenda">R$ 0,00</span></div>
+
+      <button class="btn btn-primary" style="width:100%; margin-top:16px; justify-content:center;" id="btnFinalizarVenda">Finalizar venda e gerar garantia</button>
+      <div id="garantiaGeradaWrap" style="display:none; margin-top:12px; padding:12px; border-radius:8px; background:rgba(47,225,168,0.08); border:1px solid rgba(47,225,168,0.3); text-align:center;">
+        <div style="font-size:12.5px; color:var(--mint); font-weight:600; margin-bottom:8px;">✅ Garantia gerada!</div>
+        <button class="btn btn-primary" style="width:100%; justify-content:center;" id="btnImprimirGarantiaAgora">🖨️ Imprimir garantia agora</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:20px;">
+    <div class="toolbar" style="margin-bottom:12px;">
+      <h3 style="font-family:var(--font-display); font-size:15px; margin:0;">Vendas de celular recentes</h3>
+      <input id="buscaHistoricoCelular" placeholder="Buscar por cliente…" style="max-width:220px; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:7px 10px; border-radius:8px; font-size:12px;">
+    </div>
+    <table class="dt">
+      <thead><tr><th>Data/Hora</th><th>Cliente</th><th>Vendedor</th><th>Loja</th><th>Pagamento</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+      <tbody id="linhasHistoricoCelular"><tr class="empty-row"><td colspan="8">Carregando…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="modalTitulo" style="font-family:var(--font-display); margin:0;">Novo aparelho</h3><button class="modal-close" id="fecharModal">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="fId">
+      <div class="frow2">
+        <div class="ffield"><label>Marca *</label><input id="fMarca"></div>
+        <div class="ffield"><label>Modelo *</label><input id="fModelo"></div>
+      </div>
+      <div class="frow3">
+        <div class="ffield"><label>Cor</label><input id="fCor"></div>
+        <div class="ffield"><label>Memória (GB)</label><input id="fMemoria" placeholder="Ex.: 128"></div>
+        <div class="ffield"><label>Tipo</label><select id="fTipo"><option>Novo</option><option>Usado</option><option>Seminovo</option></select></div>
+      </div>
+      <div class="frow2">
+        <div class="ffield"><label>IMEI</label><input id="fImei"></div>
+        <div class="ffield"><label>Número de série</label><input id="fSerie"></div>
+      </div>
+      <div class="ffield"><label>Código de barras (se tiver etiqueta na caixa)</label><input id="fCodigoBarras"></div>
+      <div class="frow2">
+        <div class="ffield"><label>Bateria (%) — se usado</label><input id="fBateria" type="number" min="0" max="100"></div>
+        <div class="ffield"><label>Garantia padrão (dias)</label><input id="fGarantia" type="number" value="90"></div>
+      </div>
+      <div class="frow2">
+        <div class="ffield"><label>Preço de compra (R$) *</label><input id="fPrecoCompra" type="number" step="0.01"></div>
+        <div class="ffield"><label>Preço de venda (R$) *</label><input id="fPrecoVenda" type="number" step="0.01"></div>
+      </div>
+      <div class="ffield"><label>Acessórios inclusos</label><input id="fAcessorios" placeholder="Ex.: carregador, caixa, fone…"></div>
+      <div class="ffield"><label>Estado do aparelho / observações</label><textarea id="fEstado" placeholder="Ex.: aparelho em perfeitas condições, testado com o cliente."></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="btnCancelar">Cancelar</button>
+      <button class="btn" id="btnSalvarPdf">⬇️ Salvar ficha em PDF</button>
+      <button class="btn btn-primary" id="btnSalvar">Salvar e gerar estoque</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(async function(){
+  let aparelhos = [], empresas = [], clientes = [], usuariosCel = [];
+  let configFidelidade = { ATIVO: false, VALOR_MINIMO: 0, PERCENTUAL_DESCONTO: 0 };
+  let carrinhoVenda = [], clienteSelecionadoVenda = null;
+  let ultimaGarantiaGerada = null;
+
+  function moeda(v){ return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
+  function nomeLoja(id){ if (!id) return '—'; const e = empresas.find(x=>x.ID===id); return e?e.NOME:'—'; }
+
+  // ---------- Abas ----------
+  document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); tab.classList.add('active');
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    document.getElementById('painel' + tab.dataset.tab.charAt(0).toUpperCase() + tab.dataset.tab.slice(1)).classList.add('active');
+  }));
+
+  // ---------- Estoque / cadastro ----------
+  function renderLinhas(lista){
+    if (!lista.length){ setHTML('linhas', '<tr class="empty-row"><td colspan="8">Nenhum aparelho cadastrado.</td></tr>'); return; }
+    setHTML('linhas', lista.map(a => `<tr>
+      <td><b>${a.MARCA} ${a.MODELO}</b><div style="color:var(--text-tertiary); font-size:11px;">${nomeLoja(a.EMPRESA_ID)}</div></td>
+      <td>${a.COR||'—'} ${a.MEMORIA?'/ '+a.MEMORIA+'GB':''}</td>
+      <td><span class="badge ${a.TIPO_APARELHO==='Novo'?'info':'warn'}">${a.TIPO_APARELHO||'—'}</span></td>
+      <td class="mono">${a.IMEI||'—'}</td>
+      <td>${moeda(a.PRECO_CUSTO)}</td><td>${moeda(a.PRECO_VENDA)}</td>
+      <td>${Number(a.ESTOQUE_ATUAL) > 0 ? '<span class="badge ok">'+a.ESTOQUE_ATUAL+'</span>' : '<span class="badge warn">Vendido</span>'}</td>
+      <td style="display:flex; gap:6px;">
+        <button class="btn" style="padding:6px 10px; font-size:11.5px;" onclick="window.__editarAparelho('${a.ID}')">Editar</button>
+        <button class="btn" style="padding:6px 10px; font-size:11.5px; color:var(--red);" onclick="window.__excluirAparelho('${a.ID}')">Excluir</button>
+      </td></tr>`).join(''));
+  }
+
+  async function carregar(){
+    try {
+      if (!(await checarPermissao('PRODUTOS','VISUALIZAR'))){ setHTML('linhas', '<tr class="empty-row"><td colspan="8">Sem permissão.</td></tr>'); return; }
+      empresas = await dbGetAll('EMPRESAS');
+      clientes = await dbGetAll('CLIENTES');
+      let todos = (await dbGetAll('PRODUTOS')).filter(p => p.CATEGORIA === 'Celular' && p.STATUS !== 'Excluído');
+      aparelhos = window.lojaAtivaId ? todos.filter(p => p.EMPRESA_ID === window.lojaAtivaId) : todos;
+      renderLinhas(aparelhos);
+
+      const cfgFid = await dbGetById('CONFIG', 'desconto_fidelidade');
+      if (cfgFid) configFidelidade = cfgFid;
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  }
+
+  document.getElementById('busca').addEventListener('input', e => {
+    const t = e.target.value.toLowerCase();
+    renderLinhas(aparelhos.filter(a => (a.MARCA||'').toLowerCase().includes(t) || (a.MODELO||'').toLowerCase().includes(t) || (a.IMEI||'').includes(t) || (a.CODIGO_BARRAS||'').toLowerCase().includes(t)));
+  });
+
+  const modal = document.getElementById('modal');
+  function abrirModal(a){
+    document.getElementById('modalTitulo').textContent = a ? 'Editar aparelho' : 'Novo aparelho';
+    document.getElementById('fId').value = a ? a.ID : '';
+    document.getElementById('fMarca').value = a ? a.MARCA||'' : '';
+    document.getElementById('fModelo').value = a ? a.MODELO||'' : '';
+    document.getElementById('fCor').value = a ? a.COR||'' : '';
+    document.getElementById('fMemoria').value = a ? a.MEMORIA||'' : '';
+    document.getElementById('fTipo').value = a ? a.TIPO_APARELHO||'Novo' : 'Novo';
+    document.getElementById('fImei').value = a ? a.IMEI||'' : '';
+    document.getElementById('fSerie').value = a ? a.NUMERO_SERIE||'' : '';
+    document.getElementById('fCodigoBarras').value = a ? a.CODIGO_BARRAS||'' : '';
+    document.getElementById('fBateria').value = a ? a.BATERIA_PERCENTUAL||'' : '';
+    document.getElementById('fGarantia').value = a ? a.GARANTIA_PADRAO_DIAS||90 : 90;
+    document.getElementById('fPrecoCompra').value = a ? a.PRECO_CUSTO||'' : '';
+    document.getElementById('fPrecoVenda').value = a ? a.PRECO_VENDA||'' : '';
+    document.getElementById('fAcessorios').value = a ? a.ACESSORIOS_INCLUSOS||'' : '';
+    document.getElementById('fEstado').value = a ? a.ESTADO_APARELHO||'' : '';
+    modal.classList.add('open');
+  }
+  document.getElementById('btnNovo').addEventListener('click', () => abrirModal(null));
+  document.getElementById('fecharModal').addEventListener('click', () => modal.classList.remove('open'));
+  document.getElementById('btnCancelar').addEventListener('click', () => modal.classList.remove('open'));
+
+  function coletarDados(){
+    return {
+      MARCA: document.getElementById('fMarca').value.trim(), MODELO: document.getElementById('fModelo').value.trim(),
+      COR: document.getElementById('fCor').value.trim(), MEMORIA: document.getElementById('fMemoria').value.trim(),
+      TIPO_APARELHO: document.getElementById('fTipo').value, IMEI: document.getElementById('fImei').value.trim(),
+      NUMERO_SERIE: document.getElementById('fSerie').value.trim(), CODIGO_BARRAS: document.getElementById('fCodigoBarras').value.trim(), BATERIA_PERCENTUAL: document.getElementById('fBateria').value,
+      GARANTIA_PADRAO_DIAS: Number(document.getElementById('fGarantia').value)||90,
+      PRECO_CUSTO: Number(document.getElementById('fPrecoCompra').value)||0, PRECO_VENDA: Number(document.getElementById('fPrecoVenda').value)||0,
+      ACESSORIOS_INCLUSOS: document.getElementById('fAcessorios').value.trim(), ESTADO_APARELHO: document.getElementById('fEstado').value.trim()
+    };
+  }
+
+  document.getElementById('btnSalvar').addEventListener('click', async () => {
+    const id = document.getElementById('fId').value;
+    const dados = coletarDados();
+    if (!dados.MARCA || !dados.MODELO){ mostrarToast('Informe marca e modelo.', 'erro'); return; }
+    if (!dados.PRECO_CUSTO || !dados.PRECO_VENDA){ mostrarToast('Informe preço de compra e de venda.', 'erro'); return; }
+
+    try {
+      if (id) {
+        if (!(await checarPermissao('PRODUTOS','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+        await dbUpdate('PRODUTOS', id, dados);
+        mostrarToast('Aparelho atualizado.');
+      } else {
+        if (!(await checarPermissao('PRODUTOS','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+        const empresaId = await obterLojaParaAcao('Para qual loja é este aparelho?');
+        if (!empresaId) { mostrarToast('Cadastro cancelado — é preciso escolher a loja.', 'erro'); return; }
+        await dbInsert('PRODUTOS', Object.assign({
+          NOME: dados.MARCA + ' ' + dados.MODELO + (dados.MEMORIA ? ' ' + dados.MEMORIA + 'GB' : '') + (dados.COR ? ' ' + dados.COR : ''),
+          CATEGORIA: 'Celular', EMPRESA_ID: empresaId, ESTOQUE_ATUAL: 1, ESTOQUE_MINIMO: 0,
+          STATUS: 'Ativo', DATA_CRIACAO: new Date().toISOString()
+        }, dados));
+        mostrarToast('Aparelho cadastrado e estoque gerado.');
+      }
+      modal.classList.remove('open');
+      carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  window.__editarAparelho = (id) => { const a = aparelhos.find(x => x.ID === id); if (a) abrirModal(a); };
+  window.__excluirAparelho = async (id) => {
+    if (!confirm('Excluir este aparelho do estoque?')) return;
+    try {
+      if (!(await checarPermissao('PRODUTOS','EXCLUIR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      await dbExcluirLogico('PRODUTOS', id);
+      mostrarToast('Aparelho excluído.');
+      carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  };
+
+  // ---------- Salvar ficha em PDF (registro de entrada do aparelho) ----------
+  document.getElementById('btnSalvarPdf').addEventListener('click', async () => {
+    const dados = coletarDados();
+    if (!dados.MARCA || !dados.MODELO){ mostrarToast('Preencha ao menos marca e modelo antes de gerar o PDF.', 'erro'); return; }
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      let y = await desenharCabecalhoLoja(doc, empresas);
+
+      doc.setFontSize(13); doc.setFont(undefined,'bold'); doc.text('FICHA DE ENTRADA — APARELHO', 20, y); y += 10;
+      doc.setFontSize(10.5); doc.setFont(undefined,'normal');
+
+      const linhas = [
+        ['Marca / Modelo', dados.MARCA + ' ' + dados.MODELO],
+        ['Cor / Memória', (dados.COR||'—') + ' / ' + (dados.MEMORIA||'—') + 'GB'],
+        ['Tipo', dados.TIPO_APARELHO],
+        ['IMEI', dados.IMEI||'—'],
+        ['Número de série', dados.NUMERO_SERIE||'—'],
+        ['Bateria', (dados.BATERIA_PERCENTUAL||'—') + (dados.BATERIA_PERCENTUAL ? '%' : '')],
+        ['Garantia padrão', dados.GARANTIA_PADRAO_DIAS + ' dias'],
+        ['Preço de compra', moeda(dados.PRECO_CUSTO)],
+        ['Preço de venda', moeda(dados.PRECO_VENDA)],
+        ['Acessórios inclusos', dados.ACESSORIOS_INCLUSOS||'—'],
+        ['Estado / observações', dados.ESTADO_APARELHO||'—']
+      ];
+      linhas.forEach(([rotulo, valor]) => {
+        doc.setFont(undefined,'bold'); doc.text(rotulo + ':', 20, y);
+        doc.setFont(undefined,'normal');
+        const texto = doc.splitTextToSize(String(valor), 110);
+        doc.text(texto, 75, y);
+        y += Math.max(6, texto.length*5);
+      });
+
+      doc.save('Ficha_' + dados.MARCA + '_' + dados.MODELO + '.pdf');
+      mostrarToast('Ficha em PDF salva no seu computador.');
+    } catch (e) { mostrarToast('Erro ao gerar PDF: ' + e.message, 'erro'); }
+  });
+
+  // =====================================================================
+  // ABA VENDER — mesma lógica do PDV normal, só que restrita a celulares
+  // =====================================================================
+  function aparelhosDisponiveis(){
+    return aparelhos.filter(a => Number(a.ESTOQUE_ATUAL) > 0 && !carrinhoVenda.some(c => c.PRODUTO_ID === a.ID));
+  }
+
+  const inputBuscaAparelho = document.getElementById('buscaAparelhoVenda');
+  const resAparelho = document.getElementById('resultadosAparelho');
+  inputBuscaAparelho.addEventListener('input', () => {
+    const termo = inputBuscaAparelho.value.trim().toLowerCase();
+    if (termo.length < 1){ resAparelho.classList.remove('open'); return; }
+    const lista = aparelhosDisponiveis().filter(a =>
+      (a.MARCA+' '+a.MODELO).toLowerCase().includes(termo) || (a.IMEI||'').toLowerCase().includes(termo) || (a.CODIGO_BARRAS||'').toLowerCase().includes(termo)
+    ).slice(0, 20);
+    mostrarResultadosAparelho(lista);
+  });
+
+  function mostrarResultadosAparelho(lista){
+    if (!lista.length){ setHTML('resultadosAparelho', '<div class="opt">Nenhum aparelho disponível encontrado.</div>'); resAparelho.classList.add('open'); return; }
+    setHTML('resultadosAparelho', lista.map(a => `<div class="opt" data-id="${a.ID}"><div>${a.MARCA} ${a.MODELO} ${a.COR?'- '+a.COR:''}</div><div style="color:var(--text-tertiary); font-size:11px;">${moeda(a.PRECO_VENDA)} · IMEI ${a.IMEI||'—'}</div></div>`).join(''));
+    resAparelho.classList.add('open');
+    resAparelho.querySelectorAll('.opt[data-id]').forEach(el => el.addEventListener('click', () => {
+      const aparelho = aparelhosDisponiveis().find(a => a.ID === el.getAttribute('data-id'));
+      carrinhoVenda.push({ PRODUTO_ID: aparelho.ID, NOME: aparelho.MARCA+' '+aparelho.MODELO, IMEI: aparelho.IMEI||'', PRECO_UNITARIO: Number(aparelho.PRECO_VENDA) });
+      renderCarrinhoVenda();
+      inputBuscaAparelho.value = ''; resAparelho.classList.remove('open');
+    }));
+  }
+
+  function renderCarrinhoVenda(){
+    if (!carrinhoVenda.length){ setHTML('carrinhoVenda', '<tr class="empty-row"><td colspan="3">Nenhum aparelho selecionado.</td></tr>'); }
+    else {
+      setHTML('carrinhoVenda', carrinhoVenda.map((i, idx) => `<tr>
+        <td>${i.NOME}${i.IMEI?' <span style="color:var(--text-tertiary); font-size:11px;">· IMEI '+i.IMEI+'</span>':''}</td><td>${moeda(i.PRECO_UNITARIO)}</td>
+        <td><button style="background:none;border:none;color:var(--text-tertiary);cursor:pointer;" onclick="window.__removerAparelhoVenda(${idx})">✕</button></td>
+        </tr>`).join(''));
+    }
+    atualizarResumoVenda(); atualizarTrocoVenda();
+  }
+  window.__removerAparelhoVenda = (idx) => { carrinhoVenda.splice(idx,1); renderCarrinhoVenda(); };
+
+  const inputClienteVenda = document.getElementById('buscaClienteVenda');
+  const resClienteVenda = document.getElementById('resultadosClienteVenda');
+  inputClienteVenda.addEventListener('input', () => {
+    const termo = inputClienteVenda.value.trim().toLowerCase();
+    if (termo.length < 2){ resClienteVenda.classList.remove('open'); return; }
+    const lista = clientes.filter(c => c.NOME.toLowerCase().includes(termo) || (c.CPF||'').includes(termo)).slice(0, 20);
+    if (!lista.length){ setHTML('resultadosClienteVenda', '<div class="opt">Nenhum cliente encontrado.</div>'); resClienteVenda.classList.add('open'); return; }
+    setHTML('resultadosClienteVenda', lista.map(c => `<div class="opt" data-id="${c.ID}">${c.NOME}</div>`).join(''));
+    resClienteVenda.classList.add('open');
+    resClienteVenda.querySelectorAll('.opt[data-id]').forEach(el => el.addEventListener('click', () => {
+      clienteSelecionadoVenda = lista.find(c => c.ID === el.getAttribute('data-id'));
+      document.getElementById('clienteSelecionadoNome').textContent = clienteSelecionadoVenda.NOME;
+      document.getElementById('clienteSelecionadoWrap').style.display = 'block';
+      inputClienteVenda.style.display = 'none'; inputClienteVenda.value = '';
+      resClienteVenda.classList.remove('open');
+      verificarFidelidadeVenda();
+    }));
+  });
+  document.getElementById('btnRemoverClienteVenda').addEventListener('click', () => {
+    clienteSelecionadoVenda = null;
+    document.getElementById('clienteSelecionadoWrap').style.display = 'none';
+    document.getElementById('avisoFidelidadeVenda').style.display = 'none';
+    inputClienteVenda.style.display = 'block';
+  });
+
+  // ---------- Imprimir a garantia na hora, sem precisar ir na aba Garantias ----------
+  function porExtensoCel(n){
+    const nums = {1:'um',5:'cinco',7:'sete',10:'dez',15:'quinze',20:'vinte',30:'trinta',45:'quarenta e cinco',60:'sessenta',90:'noventa',120:'cento e vinte',180:'cento e oitenta',365:'trezentos e sessenta e cinco'};
+    return nums[Number(n)] || String(n);
+  }
+  function dataBRCel(v){ return v ? new Date(v).toLocaleDateString('pt-BR') : '—'; }
+
+  document.getElementById('btnImprimirGarantiaAgora').addEventListener('click', () => {
+    if (!ultimaGarantiaGerada) return;
+    const g = ultimaGarantiaGerada;
+    const cliente = clientes.find(c => c.ID === g.CLIENTE_ID) || {};
+    const empresaPrincipal = empresas[0] || {};
+
+    const html = `
+      <div style="width:720px; margin:0 auto; padding:34px; font-family:'Segoe UI',Arial,sans-serif; color:#1a1a1a; box-sizing:border-box;">
+        <div style="display:flex; align-items:center; gap:10px; padding-bottom:12px;">
+          <img src="assets/img/Logo.png" style="width:52px; height:52px; object-fit:contain;" onerror="this.style.display='none'">
+          <div style="font-size:19px; font-weight:800; color:#e2401c;">BSTYLE - Eletrônicos & Acessórios</div>
+        </div>
+        <div style="height:4px; background:linear-gradient(90deg,#e2401c,#f5a623);"></div>
+        <h1 style="text-align:center; font-size:25px; margin:20px 0 6px; font-weight:800;">Termo de Garantia – Produto Usado</h1>
+        <div style="height:2px; background:#e2401c; margin-bottom:14px;"></div>
+
+        <h3 style="font-size:12.5px; margin:14px 0 6px;">1. IDENTIFICAÇÃO DO CLIENTE</h3>
+        <div style="font-size:12px; line-height:1.9;"><b>Cliente:</b> ${cliente.NOME||''}<br><b>CPF:</b> ${cliente.CPF||''}<br><b>Telefone:</b> ${cliente.TELEFONE||''}</div>
+
+        <h3 style="font-size:12.5px; margin:16px 0 6px;">2. DESCRIÇÃO DO PRODUTO</h3>
+        <div style="font-size:12px; line-height:1.9;">
+          <b>Marca/Modelo:</b> ${g.PRODUTO_DESCRICAO||''}<br><b>Cor / Capacidade:</b> ${g.COR_CAPACIDADE||''}<br>
+          <b>Estado do aparelho no ato da venda:</b> ${g.ESTADO_APARELHO||''}
+        </div>
+
+        <h3 style="font-size:12.5px; margin:16px 0 6px;">3. PRAZO DE GARANTIA</h3>
+        <p style="font-size:12px; line-height:1.7; margin:0;">O presente aparelho de celular usado possui garantia de <b>${g.PRAZO_DIAS} (${porExtensoCel(g.PRAZO_DIAS)}) dias</b>, contados a partir da data da compra.</p>
+
+        <h3 style="font-size:12.5px; margin:16px 0 6px;">4. A GARANTIA COBRE</h3>
+        <ul style="font-size:12px; line-height:1.7; margin:0; padding-left:18px;"><li>Defeitos de funcionamento interno do aparelho.</li><li>Falhas técnicas que impeçam o uso normal do celular.</li></ul>
+
+        <h3 style="font-size:12.5px; margin:16px 0 6px;">5. NÃO ESTÃO COBERTOS PELA GARANTIA</h3>
+        <ul style="font-size:12px; line-height:1.7; margin:0 0 8px; padding-left:18px;">
+          <li>Danos por queda, impacto ou pressão.</li><li>Tela trincada, quebrada ou riscada após a venda.</li>
+          <li>Oxidação ou contato com qualquer tipo de líquido.</li><li>Problemas causados por assistência técnica não autorizada (terceiros).</li>
+        </ul>
+        <p style="font-size:11.5px; color:#c0392b; line-height:1.6;"><b>Observação:</b> Por se tratar de produto usado, a <u>BATERIA</u> é considerada item de desgaste natural, estando coberta apenas em caso de defeito técnico.</p>
+
+        <h3 style="font-size:12.5px; margin:16px 0 6px;">6. CONDIÇÕES GERAIS</h3>
+        <p style="font-size:12px; font-weight:600; line-height:1.7;">O consumidor declara ter recebido o aparelho em perfeito estado de funcionamento, ciente de que se trata de produto usado, podendo apresentar sinais naturais de uso.</p>
+
+        <div style="margin-top:16px; font-size:12px; line-height:2;">
+          <b>Data da Venda:</b> ${dataBRCel(g.DATA_EMISSAO)}<br><b>Valor Pago:</b> ${moeda(g.VALOR_PAGO)}<br><b>Forma de Pagamento:</b> ${g.FORMA_PAGAMENTO||''}
+        </div>
+        <div style="margin-top:50px; font-size:12px;">Assinatura do Cliente: ___________________________</div>
+        <div style="margin-top:26px; font-size:12px;">Assinatura da Loja: ___________________________</div>
+      </div>`;
+
+    const janela = window.open('', '_blank');
+    janela.document.write(`<html><head><title>${g.NUMERO_GARANTIA}</title></head><body>${html}</body></html>`);
+    janela.document.close(); janela.focus();
+    const imagens = janela.document.images;
+    if (!imagens.length) { janela.print(); }
+    else {
+      let pendentes = imagens.length;
+      const seguir = () => { pendentes--; if (pendentes <= 0) janela.print(); };
+      [...imagens].forEach(img => { if (img.complete) seguir(); else { img.addEventListener('load', seguir); img.addEventListener('error', seguir); } });
+      setTimeout(() => janela.print(), 2000);
+    }
+  });
+
+  function verificarFidelidadeVenda(){
+    const aviso = document.getElementById('avisoFidelidadeVenda');
+    if (!configFidelidade.ATIVO || !clienteSelecionadoVenda || Number(clienteSelecionadoVenda.VALOR_GASTO_TOTAL||0) < Number(configFidelidade.VALOR_MINIMO||0)) {
+      aviso.style.display = 'none'; return;
+    }
+    aviso.style.display = 'block';
+    aviso.innerHTML = `🎉 Cliente fiel! Elegível a <b>${configFidelidade.PERCENTUAL_DESCONTO}% de desconto</b>. <button class="btn" style="padding:4px 8px; font-size:11px; margin-left:4px;" id="btnAplicarFidelidadeVenda">Aplicar</button>`;
+    document.getElementById('btnAplicarFidelidadeVenda').addEventListener('click', () => {
+      const subtotal = carrinhoVenda.reduce((s,i) => s + i.PRECO_UNITARIO, 0);
+      document.getElementById('descontoVenda').value = (subtotal * (Number(configFidelidade.PERCENTUAL_DESCONTO)/100)).toFixed(2);
+      atualizarResumoVenda(); atualizarTrocoVenda();
+      mostrarToast('Desconto de fidelidade aplicado.');
+    });
+  }
+
+  document.getElementById('formaPagamentoVenda').addEventListener('change', e => {
+    document.getElementById('parcelasWrapVenda').style.display = (e.target.value==='Parcelado'||e.target.value==='Cartão de Crédito') ? 'block' : 'none';
+    document.getElementById('dinheiroWrapVenda').style.display = e.target.value==='Dinheiro' ? 'block' : 'none';
+    atualizarTrocoVenda();
+  });
+  document.getElementById('descontoVenda').addEventListener('input', () => { atualizarResumoVenda(); atualizarTrocoVenda(); });
+  document.getElementById('valorRecebidoVenda').addEventListener('input', atualizarTrocoVenda);
+
+  function totalDaVendaAparelho(){
+    const subtotal = carrinhoVenda.reduce((s,i) => s + i.PRECO_UNITARIO, 0);
+    const desconto = Number(document.getElementById('descontoVenda').value) || 0;
+    return Math.max(subtotal - desconto, 0);
+  }
+  function atualizarResumoVenda(){
+    const subtotal = carrinhoVenda.reduce((s,i) => s + i.PRECO_UNITARIO, 0);
+    const desconto = Number(document.getElementById('descontoVenda').value) || 0;
+    document.getElementById('resSubtotalVenda').textContent = moeda(subtotal);
+    document.getElementById('resDescontoVenda').textContent = moeda(desconto);
+    document.getElementById('resTotalVenda').textContent = moeda(Math.max(subtotal-desconto,0));
+  }
+  function atualizarTrocoVenda(){
+    const info = document.getElementById('trocoInfoVenda');
+    const recebido = Number(document.getElementById('valorRecebidoVenda').value);
+    if (!recebido && recebido !== 0){ info.textContent=''; return; }
+    const total = totalDaVendaAparelho();
+    if (recebido < total) info.innerHTML = '<span style="color:var(--amber);">Faltam ' + moeda(total-recebido) + '.</span>';
+    else info.innerHTML = 'Troco: <span style="color:var(--mint); font-weight:700;">' + moeda(recebido-total) + '</span>';
+  }
+
+  document.getElementById('btnFinalizarVenda').addEventListener('click', async () => {
+    if (!carrinhoVenda.length){ mostrarToast('Selecione ao menos um aparelho.', 'erro'); return; }
+    if (!clienteSelecionadoVenda){ mostrarToast('Selecione o cliente — é necessário para gerar a garantia.', 'erro'); return; }
+    if (!(await checarPermissao('VENDAS','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+
+    const formaPagamento = document.getElementById('formaPagamentoVenda').value;
+    let observacaoTroco = '';
+    const totalVenda = totalDaVendaAparelho();
+    if (formaPagamento === 'Dinheiro'){
+      const recebido = Number(document.getElementById('valorRecebidoVenda').value) || 0;
+      if (recebido < totalVenda){ mostrarToast('Valor recebido menor que o total.', 'erro'); return; }
+      observacaoTroco = 'Pago em dinheiro: ' + moeda(recebido) + ' | Troco: ' + moeda(recebido-totalVenda);
+    }
+
+    try {
+      document.getElementById('btnFinalizarVenda').disabled = true;
+      const desconto = Number(document.getElementById('descontoVenda').value) || 0;
+      const empresaVendaId = carrinhoVenda.length ? aparelhos.find(a => a.ID === carrinhoVenda[0].PRODUTO_ID)?.EMPRESA_ID || '' : '';
+
+      const venda = await dbInsert('VENDAS', {
+        CLIENTE_ID: clienteSelecionadoVenda.ID, USUARIO_ID: usuarioAtual.ID, EMPRESA_ID: empresaVendaId,
+        DATA: new Date().toISOString(), VALOR_TOTAL: totalVenda, DESCONTO: desconto,
+        FORMA_PAGAMENTO: formaPagamento, PARCELAS: (formaPagamento==='Parcelado'||formaPagamento==='Cartão de Crédito') ? Number(document.getElementById('parcelasVenda').value) : 1,
+        OBSERVACOES: observacaoTroco, STATUS: 'Concluída', ORIGEM: 'CELULARES'
+      });
+
+      for (const item of carrinhoVenda) {
+        const aparelho = aparelhos.find(a => a.ID === item.PRODUTO_ID);
+        await dbInsert('ITENS_VENDA', { VENDA_ID: venda.ID, PRODUTO_ID: item.PRODUTO_ID, QUANTIDADE: 1, PRECO_UNITARIO: item.PRECO_UNITARIO });
+        await dbUpdate('PRODUTOS', aparelho.ID, { ESTOQUE_ATUAL: 0 });
+        await dbInsert('MOVIMENTOS_ESTOQUE', { EMPRESA_ID: aparelho.EMPRESA_ID||'', PRODUTO_ID: aparelho.ID, TIPO:'SAIDA_VENDA', QUANTIDADE: -1, MOTIVO:'Venda '+venda.ID, USUARIO_ID: usuarioAtual.ID, DATA: new Date().toISOString() });
+
+        const garantiaGerada = await dbInsert('GARANTIAS', {
+          VENDA_ID: venda.ID, CLIENTE_ID: clienteSelecionadoVenda.ID, PRODUTO_DESCRICAO: aparelho.MARCA + ' ' + aparelho.MODELO,
+          NUMERO_GARANTIA: gerarId('GAR'), PRAZO_DIAS: aparelho.GARANTIA_PADRAO_DIAS || 90, TIPO: 'PRODUTO_USADO',
+          COR_CAPACIDADE: [aparelho.COR, aparelho.MEMORIA ? aparelho.MEMORIA+'GB' : ''].filter(Boolean).join(' / '),
+          ESTADO_APARELHO: aparelho.ESTADO_APARELHO || 'Aparelho testado com o cliente.',
+          VALOR_PAGO: item.PRECO_UNITARIO, FORMA_PAGAMENTO: formaPagamento,
+          DATA_EMISSAO: new Date().toISOString(), STATUS: 'Ativa'
+        });
+        ultimaGarantiaGerada = garantiaGerada;
+      }
+
+      await dbInsert('FINANCEIRO', {
+        EMPRESA_ID: empresaVendaId, TIPO:'Receita', CATEGORIA:'Venda de celular', DESCRICAO:'Venda '+venda.ID, VALOR: totalVenda,
+        FORMA_PAGAMENTO: formaPagamento, DATA_VENCIMENTO: new Date().toISOString(), DATA_PAGAMENTO: new Date().toISOString(), STATUS:'Pago',
+        ORIGEM_TIPO: 'VENDA', ORIGEM_ID: venda.ID
+      });
+
+      await dbUpdate('CLIENTES', clienteSelecionadoVenda.ID, {
+        VALOR_GASTO_TOTAL: (Number(clienteSelecionadoVenda.VALOR_GASTO_TOTAL)||0) + totalVenda, DATA_ULTIMA_COMPRA: new Date().toISOString()
+      });
+
+      mostrarToast('Venda concluída! Garantia(s) gerada(s) — veja na aba Garantias.');
+      if (ultimaGarantiaGerada) {
+        document.getElementById('garantiaGeradaWrap').style.display = 'block';
+      }
+      carrinhoVenda = []; clienteSelecionadoVenda = null;
+      document.getElementById('clienteSelecionadoWrap').style.display='none';
+      document.getElementById('buscaClienteVenda').style.display='block';
+      document.getElementById('descontoVenda').value = 0; document.getElementById('valorRecebidoVenda').value='';
+      document.getElementById('trocoInfoVenda').textContent='';
+      renderCarrinhoVenda();
+      carregar();
+      carregarHistoricoCelular();
+    } catch (e) {
+      mostrarToast('Erro ao finalizar venda: ' + e.message, 'erro');
+    } finally {
+      document.getElementById('btnFinalizarVenda').disabled = false;
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#buscaAparelhoVenda') && !e.target.closest('#resultadosAparelho')) resAparelho.classList.remove('open');
+    if (!e.target.closest('#buscaClienteVenda') && !e.target.closest('#resultadosClienteVenda')) resClienteVenda.classList.remove('open');
+  });
+
+  // ---------- Histórico de vendas de celular + excluir venda errada ----------
+  let historicoVendasCelular = [];
+  function dataHoraBR(v){ return v ? new Date(v).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—'; }
+  function nomeClienteHist(id){ const c = clientes.find(x=>x.ID===id); return c?c.NOME:'Sem cliente'; }
+  function nomeVendedorHist(id){ const u = usuariosCel.find(x=>x.ID===id); return u?u.NOME:'—'; }
+
+  async function carregarHistoricoCelular(){
+    try {
+      if (!(await checarPermissao('VENDAS','VISUALIZAR'))){ setHTML('linhasHistoricoCelular', '<tr class="empty-row"><td colspan="8">Sem permissão.</td></tr>'); return; }
+      usuariosCel = await dbGetAll('USUARIOS');
+      let todas = (await dbGetAll('VENDAS')).filter(v => v.ORIGEM === 'CELULARES');
+      if (window.lojaAtivaId) todas = todas.filter(v => v.EMPRESA_ID === window.lojaAtivaId);
+      historicoVendasCelular = todas.sort((a,b) => new Date(b.DATA) - new Date(a.DATA)).slice(0, 50);
+      renderHistoricoCelular(historicoVendasCelular);
+    } catch (e) { mostrarToast('Erro ao carregar histórico: ' + e.message, 'erro'); }
+  }
+
+  function renderHistoricoCelular(lista){
+    if (!lista.length){ setHTML('linhasHistoricoCelular', '<tr class="empty-row"><td colspan="8">Nenhuma venda de celular ainda.</td></tr>'); return; }
+    setHTML('linhasHistoricoCelular', lista.map(v => `<tr>
+      <td>${dataHoraBR(v.DATA)}</td><td>${nomeClienteHist(v.CLIENTE_ID)}</td><td>${nomeVendedorHist(v.USUARIO_ID)}</td><td>${nomeLoja(v.EMPRESA_ID)}</td>
+      <td>${v.FORMA_PAGAMENTO||'—'}</td><td>${moeda(v.VALOR_TOTAL)}</td>
+      <td><span class="badge ${v.STATUS==='Cancelada'?'info':'ok'}">${v.STATUS}</span></td>
+      <td>${v.STATUS!=='Cancelada' ? `<button class="btn" style="padding:6px 10px; font-size:11.5px; color:var(--red);" onclick="window.__excluirVendaCelular('${v.ID}')">Excluir</button>` : ''}</td>
+      </tr>`).join(''));
+  }
+
+  document.getElementById('buscaHistoricoCelular').addEventListener('input', e => {
+    const t = e.target.value.toLowerCase();
+    renderHistoricoCelular(historicoVendasCelular.filter(v => nomeClienteHist(v.CLIENTE_ID).toLowerCase().includes(t)));
+  });
+
+  /**
+   * Exclui uma venda de celular feita errada: devolve o aparelho pro
+   * estoque (volta a aparecer em "Estoque de celulares"), cancela o
+   * lançamento financeiro, desconta do total gasto do cliente, apaga a
+   * garantia gerada e apaga a venda.
+   */
+  window.__excluirVendaCelular = async (vendaId) => {
+    if (!confirm('Excluir esta venda? O aparelho volta pro estoque e o financeiro/garantia são cancelados. Essa ação não pode ser desfeita.')) return;
+    try {
+      if (!(await checarPermissao('VENDAS','EXCLUIR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+
+      const venda = historicoVendasCelular.find(v => v.ID === vendaId);
+      const itensDaVenda = await dbQuery('ITENS_VENDA', { VENDA_ID: vendaId });
+
+      for (const item of itensDaVenda) {
+        const produto = await dbGetById('PRODUTOS', item.PRODUTO_ID);
+        if (produto) {
+          await dbUpdate('PRODUTOS', produto.ID, { ESTOQUE_ATUAL: (Number(produto.ESTOQUE_ATUAL)||0) + 1 });
+          await dbInsert('MOVIMENTOS_ESTOQUE', { EMPRESA_ID: venda.EMPRESA_ID||'', PRODUTO_ID: produto.ID, TIPO:'DEVOLUCAO', QUANTIDADE: 1, MOTIVO:'Exclusão da venda '+vendaId, USUARIO_ID: usuarioAtual.ID, DATA: new Date().toISOString() });
+        }
+        await dbDelete('ITENS_VENDA', item.ID);
+      }
+
+      const lancamentos = await dbQuery('FINANCEIRO', { ORIGEM_ID: vendaId });
+      for (const lanc of lancamentos) await dbDelete('FINANCEIRO', lanc.ID);
+
+      const garantiasDaVenda = await dbQuery('GARANTIAS', { VENDA_ID: vendaId });
+      for (const g of garantiasDaVenda) await dbDelete('GARANTIAS', g.ID);
+
+      if (venda && venda.CLIENTE_ID) {
+        const cliente = await dbGetById('CLIENTES', venda.CLIENTE_ID);
+        if (cliente) await dbUpdate('CLIENTES', cliente.ID, { VALOR_GASTO_TOTAL: Math.max(0, (Number(cliente.VALOR_GASTO_TOTAL)||0) - Number(venda.VALOR_TOTAL||0)) });
+      }
+
+      await dbDelete('VENDAS', vendaId);
+      mostrarToast('Venda excluída e aparelho devolvido ao estoque.');
+      carregarHistoricoCelular();
+      carregar();
+    } catch (e) { mostrarToast('Erro ao excluir venda: ' + e.message, 'erro'); }
+  };
+
+  await carregar();
+  renderCarrinhoVenda();
+  carregarHistoricoCelular();
+})();
+</script>

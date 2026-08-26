@@ -1,0 +1,1213 @@
+<style>
+  .tabs{ display:flex; gap:4px; border-bottom:1px solid var(--hairline); margin-bottom:20px; }
+  .tab{ padding:10px 14px; font-size:12.5px; color:var(--text-secondary); cursor:pointer; border-bottom:2px solid transparent; }
+  .tab.active{ color:var(--mint); border-color:var(--mint); }
+  .view-panel{ display:none; }
+  .view-panel.active{ display:block; }
+
+  .kanban{ display:flex; gap:12px; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:8px; scroll-snap-type:x proximity; }
+  .kanban-col{ flex:0 0 240px; scroll-snap-align:start; }
+  .kanban-col{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; padding:12px; }
+  .kanban-col h4{ font-size:11px; text-transform:uppercase; color:var(--text-tertiary); font-family:var(--font-mono); margin:0 0 10px; }
+  .kanban-card{ background:var(--bg-elevated); border:1px solid var(--hairline); border-radius:9px; padding:10px 12px; margin-bottom:8px; font-size:12px; cursor:pointer; }
+
+  .modal-overlay{ position:fixed; inset:0; background:rgba(3,5,8,0.6); display:none; align-items:center; justify-content:center; z-index:100; padding:24px; }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:14px; width:100%; max-width:760px; max-height:90vh; overflow-y:auto; }
+  .modal-head{ display:flex; justify-content:space-between; align-items:center; padding:18px 22px; border-bottom:1px solid var(--hairline); position:sticky; top:0; background:var(--bg-surface); z-index:2; }
+  .modal-body{ padding:20px 22px; }
+  .modal-foot{ display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--hairline); position:sticky; bottom:0; background:var(--bg-surface); }
+  .ffield{ margin-bottom:14px; }
+  .ffield label{ display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px; }
+  .ffield input, .ffield select, .ffield textarea{ width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; font-family:inherit; }
+  .ffield textarea{ min-height:70px; resize:vertical; }
+  .frow2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .frow3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  .modal-close{ background:none; border:none; color:var(--text-tertiary); font-size:18px; cursor:pointer; }
+  .section-title{ font-family:var(--font-display); font-size:14px; font-weight:600; margin:22px 0 10px; padding-top:14px; border-top:1px solid var(--hairline); }
+  .section-title:first-child{ border-top:none; padding-top:0; margin-top:0; }
+
+  .senha-tabs{ display:flex; gap:0; margin-bottom:14px; border:1px solid var(--hairline); border-radius:8px; overflow:hidden; }
+  .senha-tabs button{ flex:1; padding:9px 8px; border:none; border-right:1px solid var(--hairline); background:var(--bg-elevated); color:var(--text-secondary); cursor:pointer; font-size:12.5px; font-family:inherit; }
+  .senha-tabs button:last-child{ border-right:none; }
+  .senha-tabs button.active{ background:var(--mint); color:#07130F; font-weight:600; }
+  .tabela-pecas{ width:100%; border-collapse:collapse; }
+  .tabela-pecas th{ text-align:left; font-size:10.5px; color:var(--text-tertiary); font-family:var(--font-mono); text-transform:uppercase; padding:0 6px 6px 0; }
+  .tabela-pecas td{ padding:4px 6px 4px 0; }
+  .tabela-pecas input{ width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:8px 10px; border-radius:6px; font-size:12.5px; font-family:inherit; box-sizing:border-box; }
+  .tabela-pecas tfoot td{ padding-top:10px; border-top:1px solid var(--hairline); font-size:12.5px; }
+  .pattern-grid{ display:grid; grid-template-columns:repeat(3,40px); grid-template-rows:repeat(3,40px); gap:16px; margin:10px auto; width:fit-content; }
+  .pattern-dot{ width:40px; height:40px; border-radius:50%; border:2px solid var(--hairline); background:var(--bg-elevated); cursor:pointer; position:relative; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; color:transparent; font-family:var(--font-mono); }
+  .pattern-dot.active{ border-color:var(--mint); background:rgba(47,225,168,0.15); color:var(--mint); }
+
+  .diagramas-wrap{ display:flex; gap:24px; justify-content:center; flex-wrap:wrap; }
+  .diagrama-col{ text-align:center; }
+  .diagrama-col .titulo{ font-size:11.5px; color:var(--text-tertiary); font-family:var(--font-mono); margin-bottom:8px; }
+  .estado-entrada-wrap{ display:grid; grid-template-columns:1fr 300px; gap:20px; align-items:start; }
+  @media (max-width:900px){ .estado-entrada-wrap{ grid-template-columns:1fr; } }
+  .checklist-funcional{ background:var(--bg-elevated); border:1px solid var(--hairline); border-radius:10px; padding:14px 16px; }
+  .checklist-titulo{ font-size:12.5px; font-weight:600; margin-bottom:12px; }
+  .checklist-header-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:4px; }
+  .checklist-header-row .checklist-titulo{ margin-bottom:0; }
+  .checklist-explicacao{ font-size:11px; color:var(--amber); margin:0 0 12px; }
+  .toggle-sem-teste{ display:flex; align-items:center; gap:6px; cursor:pointer; flex-shrink:0; }
+  .toggle-sem-teste input{ display:none; }
+  .toggle-sem-teste .toggle-slider{ width:34px; height:19px; border-radius:20px; background:var(--hairline); position:relative; transition:background 0.15s; flex-shrink:0; }
+  .toggle-sem-teste .toggle-slider::before{ content:''; position:absolute; width:15px; height:15px; border-radius:50%; background:#fff; top:2px; left:2px; transition:transform 0.15s; }
+  .toggle-sem-teste input:checked + .toggle-slider{ background:var(--amber); }
+  .toggle-sem-teste input:checked + .toggle-slider::before{ transform:translateX(15px); }
+  .toggle-sem-teste .toggle-label{ font-size:11.5px; color:var(--text-secondary); }
+  .checklist-funcional.desabilitado #listaChecklist{ opacity:0.35; pointer-events:none; }
+  .checklist-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid var(--hairline); }
+  .checklist-item:last-child{ border-bottom:none; }
+  .checklist-item .nome{ font-size:11.5px; color:var(--text-secondary); flex:1; }
+  .checklist-opcoes{ display:flex; gap:4px; flex-shrink:0; }
+  .checklist-opcoes button{ width:30px; height:24px; border-radius:6px; border:1px solid var(--hairline); background:var(--bg-surface); color:var(--text-tertiary); font-size:10px; cursor:pointer; font-weight:600; }
+  .checklist-opcoes button.selecionado[data-resp="SIM"]{ background:rgba(47,225,168,0.18); border-color:var(--mint); color:var(--mint); }
+  .checklist-opcoes button.selecionado[data-resp="NAO"]{ background:rgba(255,92,92,0.18); border-color:var(--red); color:var(--red); }
+  .checklist-opcoes button.selecionado[data-resp="NA"]{ background:rgba(136,145,163,0.18); border-color:var(--text-tertiary); color:var(--text-secondary); }
+  .checklist-item.pendente .nome{ color:var(--amber); }
+  .badge-checklist-resp{ font-size:10.5px; font-weight:600; padding:3px 10px; border-radius:20px; }
+  .badge-checklist-resp.SIM{ background:rgba(47,225,168,0.14); color:var(--mint); }
+  .badge-checklist-resp.NAO{ background:rgba(255,92,92,0.14); color:var(--red); }
+  .badge-checklist-resp.NA{ background:rgba(136,145,163,0.14); color:var(--text-secondary); }
+  .badge-checklist-resp.PENDENTE{ background:rgba(136,145,163,0.08); color:var(--text-tertiary); }
+  .phone-svg{ border-radius:20px; }
+
+  .calendario{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; padding:18px; }
+  .cal-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .cal-header h3{ font-family:var(--font-display); margin:0; font-size:16px; }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+  .cal-dia-label{ font-size:10.5px; color:var(--text-tertiary); text-align:center; font-family:var(--font-mono); padding-bottom:6px; }
+  .cal-dia{ min-height:76px; border:1px solid var(--hairline); border-radius:8px; padding:6px; font-size:11px; background:var(--bg-elevated); cursor:pointer; }
+  .cal-dia.fora-mes{ opacity:0.3; }
+  .cal-dia.hoje{ border-color:var(--mint); }
+  .cal-dia .num{ color:var(--text-secondary); font-family:var(--font-mono); }
+  .cal-dia .os-chip{ background:rgba(47,225,168,0.15); color:var(--mint); border-radius:4px; padding:2px 5px; font-size:9.5px; margin-top:4px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .filtros-assist{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin:16px 0; }
+  .filtros-assist .grupo{ display:flex; flex-direction:column; gap:4px; }
+  .filtros-assist .grupo span{ font-size:10.5px; color:var(--text-tertiary); }
+  .filtros-assist input{ background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:8px 12px; border-radius:8px; font-size:12.5px; }
+  .filtros-assist input#filtroBuscaAssist{ min-width:220px; }
+  .entregues-toggle{ display:flex; align-items:center; justify-content:space-between; cursor:pointer; padding:6px 2px; font-size:11.5px; color:var(--text-secondary); user-select:none; }
+  .entregues-toggle .seta{ transition:transform 0.15s; display:inline-block; }
+  .entregues-toggle.aberto .seta{ transform:rotate(90deg); }
+  .entregues-lista{ display:none; }
+  .entregues-lista.aberto{ display:block; }
+</style>
+
+<div class="toolbar">
+  <div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Assistência técnica</h1></div>
+  <button class="btn btn-primary" id="btnNovaOS">+ Nova OS</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-view="kanban">Quadro</div>
+  <div class="tab" data-view="calendario">Calendário de entregas</div>
+</div>
+
+<div id="viewKanban" class="view-panel active">
+  <div class="filtros-assist">
+    <div class="grupo"><span>Buscar</span><input id="filtroBuscaAssist" placeholder="Nº da OS, aparelho ou cliente…"></div>
+    <div class="grupo"><span>De</span><input type="date" id="filtroDeAssist"></div>
+    <div class="grupo"><span>Até</span><input type="date" id="filtroAteAssist"></div>
+    <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--text-secondary); cursor:pointer; padding-bottom:8px;">
+      <input type="checkbox" id="filtroPagamentoPendente"> Só com pagamento pendente
+    </label>
+    <button class="btn" id="btnLimparFiltroAssist" style="padding:8px 12px;">Limpar</button>
+  </div>
+  <div class="kanban" id="kanban"></div>
+</div>
+
+<div id="viewCalendario" class="view-panel">
+  <div class="calendario">
+    <div class="cal-header">
+      <button class="btn" id="btnMesAnterior">‹</button>
+      <h3 id="calTitulo">—</h3>
+      <button class="btn" id="btnMesSeguinte">›</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalNova">
+  <div class="modal-box">
+    <div class="modal-head"><h3 style="font-family:var(--font-display); margin:0;">Nova Ordem de Serviço</h3><button class="modal-close" id="fecharModalNova">✕</button></div>
+    <div class="modal-body">
+      <div class="section-title">Cliente e aparelho</div>
+      <div class="frow2">
+        <div class="ffield"><label>Cliente *</label><select id="fCliente"><option value="">Selecione…</option></select></div>
+        <div class="ffield"><label>Técnico responsável</label><input id="fTecnico" placeholder="Nome do técnico"></div>
+      </div>
+      <div class="frow3">
+        <div class="ffield"><label>Marca</label><input id="fMarca"></div>
+        <div class="ffield"><label>Modelo</label><input id="fModelo"></div>
+        <div class="ffield"><label>IMEI / Nº série</label><input id="fImei"></div>
+      </div>
+      <div class="ffield"><label>Acessórios entregues junto</label><input id="fAcessorios" placeholder="Ex.: carregador, capinha, fone…"></div>
+
+      <div class="section-title">Diagnóstico e serviço</div>
+      <div class="ffield"><label>Defeito informado pelo cliente *</label><textarea id="fDefeito"></textarea></div>
+      <div class="ffield"><label>Diagnóstico técnico</label><textarea id="fDiagnostico" placeholder="Preenchido pelo técnico ao avaliar o aparelho"></textarea></div>
+      <div class="ffield"><label>Peças a repor</label>
+        <table class="tabela-pecas">
+          <thead><tr><th>Peça</th><th style="width:130px;">Preço (R$)</th></tr></thead>
+          <tbody id="linhasPecasNova"></tbody>
+          <tfoot><tr><td style="text-align:right; font-weight:600;">Total das peças:</td><td style="font-weight:700;" id="totalPecasNova">R$ 0,00</td></tr></tfoot>
+        </table>
+      </div>
+      <div class="frow2">
+        <div class="ffield"><label>Valor do serviço (R$)</label><input id="fValor" type="number" step="0.01"></div>
+        <div class="ffield"><label>Previsão de entrega</label><input id="fPrazo" type="date"></div>
+      </div>
+
+      <div class="section-title">Desbloqueio do aparelho</div>
+      <div class="senha-tabs">
+        <button type="button" class="active" data-tipo="PIN">PIN</button>
+        <button type="button" data-tipo="TEXTO">Senha texto</button>
+        <button type="button" data-tipo="PADRAO">Padrão</button>
+      </div>
+      <div class="ffield" id="senhaPinWrap"><label>PIN numérico</label><input id="fSenhaPin" placeholder="Ex.: 1234" inputmode="numeric"></div>
+      <div class="ffield" id="senhaTextoWrap" style="display:none;"><label>Senha / texto</label><input id="fSenhaTexto" placeholder="Digite a senha informada pelo cliente"></div>
+      <div class="ffield" id="senhaPadraoWrap" style="display:none; text-align:center;">
+        <label style="text-align:left;">Padrão de desbloqueio — clique os pontos na ordem certa</label>
+        <div class="pattern-grid" id="patternGrid"></div>
+        <div style="font-size:11px; color:var(--text-tertiary); font-family:var(--font-mono); margin-bottom:8px;" id="patternSeq">—</div>
+        <button type="button" class="btn" id="btnLimparPadrao" style="font-size:11.5px; padding:6px 12px;">🔄 Limpar padrão</button>
+      </div>
+
+      <div class="section-title">Estado do aparelho na entrada</div>
+      <div class="estado-entrada-wrap">
+        <div>
+          <p style="color:var(--text-secondary); font-size:12px; margin:0 0 12px;">Clique no desenho pra marcar riscos, rachaduras ou manchas já existentes — protege a loja de reclamações de "isso não estava aqui antes".</p>
+          <div class="diagramas-wrap">
+            <div class="diagrama-col"><div class="titulo">FRENTE</div><div id="diagramaFrenteNova"></div></div>
+            <div class="diagrama-col"><div class="titulo">VERSO</div><div id="diagramaVersoNova"></div></div>
+          </div>
+        </div>
+        <div class="checklist-funcional">
+          <div class="checklist-header-row">
+            <div class="checklist-titulo" id="checklistTituloNova">Os itens abaixo estão funcionando? <span style="color:var(--red);">*</span></div>
+            <label class="toggle-sem-teste">
+              <input type="checkbox" id="chkSemTeste">
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Sem teste</span>
+            </label>
+          </div>
+          <p class="checklist-explicacao" id="explicacaoSemTeste" style="display:none;">Aparelho não pôde ser testado na entrada (ex.: não liga) — o checklist fica dispensado pra essa OS.</p>
+          <div id="listaChecklist"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="btnCancelarNova">Cancelar</button>
+      <button class="btn btn-primary" id="btnSalvarNova">Abrir OS</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalVer">
+  <div class="modal-box">
+    <div class="modal-head"><h3 style="font-family:var(--font-display); margin:0;" id="verTitulo">OS</h3><button class="modal-close" id="fecharModalVer">✕</button></div>
+    <div class="modal-body" id="verCorpo"></div>
+    <div class="modal-foot">
+      <button class="btn" id="btnFecharVer">Fechar</button>
+      <button class="btn" id="btnExcluirOS" style="color:var(--red);">Excluir OS</button>
+      <button class="btn" id="btnGerarGarantiaOS">Gerar garantia</button>
+      <button class="btn" id="btnImprimirOS">🖨️ Imprimir (2 vias)</button>
+      <button class="btn btn-primary" id="btnSalvarVer">Salvar alterações</button>
+      <button class="btn btn-primary" id="btnPdfOS">⬇️ PDF (2 vias)</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(async function(){
+  const STATUS_COLUNAS = ['Aberta','Em diagnóstico','Aguardando peça','Em reparo','Pronto','Com Defeito - Devolução','Entregue'];
+
+  const ITENS_CHECKLIST = [
+    'Tela Display', 'Touch Screen Tela', 'Teclas', 'Sensores de Proximidade', 'Bluetooth',
+    'Wifi', 'Ligações', 'Alto Falante', 'Áudio Auricular', 'Microfone',
+    'Câmera', 'Conector de Carga', 'Conector de Cartão de memória', 'Conector de Fone de Ouvido', 'Biometria'
+  ];
+  let checklistRespostas = {};
+  let semTeste = false;
+
+  document.getElementById('chkSemTeste').addEventListener('change', (e) => {
+    semTeste = e.target.checked;
+    document.querySelector('.checklist-funcional').classList.toggle('desabilitado', semTeste);
+    document.getElementById('explicacaoSemTeste').style.display = semTeste ? 'block' : 'none';
+    document.getElementById('checklistTituloNova').innerHTML = semTeste
+      ? 'Os itens abaixo estão funcionando?'
+      : 'Os itens abaixo estão funcionando? <span style="color:var(--red);">*</span>';
+  });
+
+  function renderChecklist(){
+    setHTML('listaChecklist', ITENS_CHECKLIST.map(item => {
+      const resposta = checklistRespostas[item] || null;
+      return `<div class="checklist-item ${!resposta?'pendente':''}" data-item="${item}">
+        <span class="nome">${item}</span>
+        <div class="checklist-opcoes">
+          <button type="button" data-resp="SIM" class="${resposta==='SIM'?'selecionado':''}">Sim</button>
+          <button type="button" data-resp="NAO" class="${resposta==='NAO'?'selecionado':''}">Não</button>
+          <button type="button" data-resp="NA" class="${resposta==='NA'?'selecionado':''}">N/A</button>
+        </div>
+      </div>`;
+    }).join(''));
+
+    document.querySelectorAll('#listaChecklist .checklist-opcoes button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = btn.closest('.checklist-item').dataset.item;
+        checklistRespostas[item] = btn.dataset.resp;
+        renderChecklist();
+      });
+    });
+  }
+
+  const CHECKLIST_LABEL_RESP = { SIM:'Sim', NAO:'Não', NA:'N/A' };
+
+  /** Mostra o checklist já preenchido na abertura da OS — só leitura, com selo colorido. */
+  function renderChecklistLeitura(jsonSalvo, semTesteSalvo){
+    if (semTesteSalvo) {
+      setHTML('listaChecklistVer', '<div style="display:flex; align-items:center; gap:6px; color:var(--amber); font-size:12px; font-weight:600;">🚫 Aparelho recebido sem teste — checklist não se aplica a essa OS.</div>');
+      return;
+    }
+    let respostas = {};
+    try { respostas = jsonSalvo ? JSON.parse(jsonSalvo) : {}; } catch (e) { respostas = {}; }
+
+    if (!Object.keys(respostas).length) {
+      setHTML('listaChecklistVer', '<span style="color:var(--text-tertiary); font-size:11.5px;">Essa OS foi aberta antes desse checklist existir no sistema.</span>');
+      return;
+    }
+
+    setHTML('listaChecklistVer', ITENS_CHECKLIST.map(item => {
+      const resposta = respostas[item];
+      return `<div class="checklist-item">
+        <span class="nome">${item}</span>
+        <span class="badge-checklist-resp ${resposta||'PENDENTE'}">${resposta ? CHECKLIST_LABEL_RESP[resposta] : '—'}</span>
+      </div>`;
+    }).join(''));
+  }
+  let ordens = [], clientes = [], empresas = [];
+
+  function moeda(v){ return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
+
+  /** Monta as linhas da tabela de peças (mínimo 5), preenchidas se vier itens existentes. */
+  function gerarLinhasPecas(containerId, totalElId, itensExistentes){
+    const tbody = document.getElementById(containerId);
+    const itens = (itensExistentes && itensExistentes.length) ? itensExistentes : [];
+    const totalLinhas = Math.max(5, itens.length);
+    let html = '';
+    for (let i = 0; i < totalLinhas; i++){
+      const item = itens[i] || { nome:'', preco:'' };
+      html += `<tr>
+        <td><input class="input-peca" value="${item.nome||''}" placeholder="Ex.: Tela original"></td>
+        <td><input class="input-preco-peca" type="number" step="0.01" value="${item.preco||''}"></td>
+      </tr>`;
+    }
+    tbody.innerHTML = html;
+    tbody.querySelectorAll('.input-preco-peca').forEach(inp => inp.addEventListener('input', () => calcularTotalPecas(containerId, totalElId)));
+    calcularTotalPecas(containerId, totalElId);
+  }
+
+  function calcularTotalPecas(containerId, totalElId){
+    const total = [...document.querySelectorAll('#'+containerId+' .input-preco-peca')].reduce((s,inp) => s + (Number(inp.value)||0), 0);
+    document.getElementById(totalElId).textContent = moeda(total);
+  }
+
+  /** Lê a tabela e devolve { itens, texto, total } — texto é o formato antigo, pra manter compatibilidade. */
+  function coletarPecas(containerId){
+    const linhas = [...document.querySelectorAll('#'+containerId+' tr')];
+    const itens = linhas.map(l => ({
+      nome: l.querySelector('.input-peca').value.trim(),
+      preco: Number(l.querySelector('.input-preco-peca').value) || 0
+    })).filter(i => i.nome || i.preco);
+    const texto = itens.map(i => i.preco ? `${i.nome} (${moeda(i.preco)})` : i.nome).join(', ');
+    const total = itens.reduce((s,i) => s + i.preco, 0);
+    return { itens, texto, total };
+  }
+
+  /** Mostra o status de pagamento do serviço — só leitura. O pagamento em si agora é feito na aba Vendas (buscando pelo número da OS). */
+  function valorPagoOS(os){ try { return JSON.parse(os.PAGAMENTOS_OS || '[]').reduce((s,p)=>s+Number(p.valor||0),0); } catch(e){ return 0; } }
+  function saldoPendenteOS(os){ return Math.max(0, Number(os.VALOR_SERVICO||0) - valorPagoOS(os)); }
+
+  function renderAreaPagamento(os){
+    let pagamentos = [];
+    try { pagamentos = JSON.parse(os.PAGAMENTOS_OS || '[]'); } catch(e) {}
+    const totalPago = valorPagoOS(os), saldo = saldoPendenteOS(os);
+
+    if (!pagamentos.length) {
+      setHTML('areaPagamentoOS', `
+        <div style="display:flex; align-items:center; gap:8px; color:var(--amber); font-weight:600; font-size:13px;">⏳ Pendente — nada pago ainda (${moeda(Number(os.VALOR_SERVICO||0))})</div>
+        <div style="font-size:11.5px; color:var(--text-tertiary); margin-top:4px;">Pra receber, vai na aba Vendas e busca pelo número desta OS (${os.NUMERO_OS}).</div>
+      `);
+      return;
+    }
+
+    const linhasPagamentos = pagamentos.map((p, i) => `<div style="display:flex; justify-content:space-between; font-size:12px; padding:5px 0; ${i>0?'border-top:1px solid var(--hairline);':''}">
+      <span style="color:var(--text-secondary);">Parte ${i+1} — ${new Date(p.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})} · ${p.forma||'—'}</span>
+      <b style="color:var(--mint);">${moeda(p.valor)}</b>
+    </div>`).join('');
+
+    const statusResumo = saldo <= 0
+      ? `<div style="color:var(--mint); font-weight:600; font-size:13px; margin-bottom:8px;">✅ Pago integralmente — ${moeda(totalPago)}</div>`
+      : `<div style="color:var(--amber); font-weight:600; font-size:13px; margin-bottom:8px;">🔶 Parcialmente pago — ${moeda(totalPago)} de ${moeda(Number(os.VALOR_SERVICO||0))} (falta ${moeda(saldo)})</div>`;
+
+    setHTML('areaPagamentoOS', statusResumo + linhasPagamentos +
+      (saldo > 0 ? `<div style="font-size:11px; color:var(--text-tertiary); margin-top:8px;">Pro restante, vai na aba Vendas e busca por "${os.NUMERO_OS}" de novo.</div>` : ''));
+  }
+
+  /** Mostra de volta a senha/PIN/padrão cadastrado na abertura da OS — clara e legível. */
+  /** Lista os "achados" identificados depois do reparo — separados do checklist de entrada. */
+  function renderListaPosTeste(os){
+    let achados = [];
+    try { achados = JSON.parse(os.PROBLEMAS_POS_TESTE || '[]'); } catch(e) {}
+
+    if (!achados.length) {
+      setHTML('listaPosTeste', '<span style="color:var(--text-tertiary); font-size:12px;">Nenhum problema pós-teste registrado nessa OS.</span>');
+      return;
+    }
+
+    setHTML('listaPosTeste', achados.map((a, i) => `
+      <div style="background:var(--bg-elevated); border:1px solid var(--hairline); border-left:3px solid var(--amber); border-radius:8px; padding:10px 14px; margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+          <div style="flex:1;">
+            <span style="font-size:10px; font-weight:700; color:var(--amber); letter-spacing:0.5px;">PÓS-TESTE</span>
+            <span style="font-size:10.5px; color:var(--text-tertiary); margin-left:6px;">${new Date(a.data).toLocaleDateString('pt-BR')}</span>
+            <p style="margin:4px 0 0; font-size:12.5px;">${a.descricao}</p>
+            ${a.valorEstimado ? `<p style="margin:4px 0 0; font-size:12px; color:var(--text-secondary);">Valor estimado: ${moeda(a.valorEstimado)}</p>` : ''}
+          </div>
+          <div style="text-align:right; flex-shrink:0;">
+            <span style="font-size:11px; font-weight:600; color:${a.comunicadoCliente?'var(--mint)':'var(--red)'};">${a.comunicadoCliente ? '✅ Cliente avisado' : '⏳ Não avisado'}</span><br>
+            ${!a.comunicadoCliente ? `<button class="btn" style="padding:5px 9px; font-size:11px; margin-top:6px;" onclick="window.__marcarAvisadoPosTeste(${i})">Marcar avisado</button>
+            <button class="btn" style="padding:5px 9px; font-size:11px; margin-top:6px; color:var(--mint);" onclick="window.__avisarWhatsappPosTeste(${i})">💬 WhatsApp</button>` : ''}
+          </div>
+        </div>
+      </div>`).join(''));
+  }
+
+  /** Liga os eventos do formulário de pós-teste — precisa ser chamado toda vez que a
+   * OS é aberta, porque esse HTML é recriado a cada vez (não existe na carga inicial). */
+  function ligarEventosPosTeste(){
+    document.getElementById('btnNovoPosTeste').addEventListener('click', () => {
+      document.getElementById('formNovoPosTeste').style.display = 'block';
+      document.getElementById('btnNovoPosTeste').style.display = 'none';
+      ['fPosTesteDescricao','fPosTesteValor'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('fPosTesteComunicado').checked = false;
+    });
+    document.getElementById('btnCancelarPosTeste').addEventListener('click', () => {
+      document.getElementById('formNovoPosTeste').style.display = 'none';
+      document.getElementById('btnNovoPosTeste').style.display = 'inline-flex';
+    });
+
+    document.getElementById('btnSalvarPosTeste').addEventListener('click', async () => {
+      const descricao = document.getElementById('fPosTesteDescricao').value.trim();
+      if (!descricao){ mostrarToast('Descreve o que foi identificado.', 'erro'); return; }
+      try {
+        if (!(await checarPermissao('ASSISTENCIA','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+        let achados = [];
+        try { achados = JSON.parse(osAtual.PROBLEMAS_POS_TESTE || '[]'); } catch(e) {}
+        achados.push({
+          descricao, data: new Date().toISOString(),
+          valorEstimado: Number(document.getElementById('fPosTesteValor').value) || 0,
+          comunicadoCliente: document.getElementById('fPosTesteComunicado').checked
+        });
+        await dbUpdate('ASSISTENCIAS', osAtual.ID, { PROBLEMAS_POS_TESTE: JSON.stringify(achados) });
+        osAtual.PROBLEMAS_POS_TESTE = JSON.stringify(achados);
+        renderListaPosTeste(osAtual);
+        document.getElementById('formNovoPosTeste').style.display = 'none';
+        document.getElementById('btnNovoPosTeste').style.display = 'inline-flex';
+        mostrarToast('Problema pós-teste registrado.');
+      } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+    });
+  }
+
+  window.__marcarAvisadoPosTeste = async (indice) => {
+    try {
+      let achados = JSON.parse(osAtual.PROBLEMAS_POS_TESTE || '[]');
+      achados[indice].comunicadoCliente = true;
+      await dbUpdate('ASSISTENCIAS', osAtual.ID, { PROBLEMAS_POS_TESTE: JSON.stringify(achados) });
+      osAtual.PROBLEMAS_POS_TESTE = JSON.stringify(achados);
+      renderListaPosTeste(osAtual);
+      mostrarToast('Marcado como avisado.');
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  };
+
+  window.__avisarWhatsappPosTeste = (indice) => {
+    const achados = JSON.parse(osAtual.PROBLEMAS_POS_TESTE || '[]');
+    const achado = achados[indice];
+    const cliente = clientes.find(c => c.ID === osAtual.CLIENTE_ID);
+    if (!cliente || !cliente.TELEFONE){ mostrarToast('Esse cliente não tem telefone cadastrado.', 'erro'); return; }
+    const telefone = String(cliente.TELEFONE).replace(/\D/g,'');
+    const texto = `Olá, ${cliente.NOME}! Durante o reparo do seu aparelho (OS ${osAtual.NUMERO_OS}), identificamos um problema adicional que não pôde ser detectado antes do conserto: *${achado.descricao}*.${achado.valorEstimado ? '\n\nValor estimado pra esse reparo: ' + moeda(achado.valorEstimado) + '.' : ''}\n\nQualquer dúvida, estamos à disposição!`;
+    window.open('https://wa.me/55' + telefone + '?text=' + encodeURIComponent(texto), '_blank');
+  };
+
+  function montarVisualizacaoSenha(tipo, valor){
+    if (!tipo || !valor) return '<span style="color:var(--text-tertiary); font-size:12.5px;">Nenhum desbloqueio informado na abertura desta OS.</span>';
+
+    if (tipo === 'PADRAO') {
+      const sequencia = valor.split(',').map(Number);
+      const pontos = Array.from({length:9}, (_, i) => {
+        const numero = i + 1;
+        const ordem = sequencia.indexOf(numero);
+        const ativo = ordem !== -1;
+        return `<div style="width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;
+          background:${ativo ? 'rgba(47,225,168,0.18)' : 'var(--bg-surface)'}; border:2px solid ${ativo ? 'var(--mint)' : 'var(--hairline)'}; color:${ativo ? 'var(--mint)' : 'var(--text-tertiary)'};">
+          ${ativo ? ordem + 1 : ''}
+        </div>`;
+      }).join('');
+      return `
+        <div style="font-size:11px; color:var(--text-tertiary); font-family:var(--font-mono); margin-bottom:10px;">TIPO: PADRÃO DE DESENHO</div>
+        <div style="display:grid; grid-template-columns:repeat(3,34px); grid-template-rows:repeat(3,34px); gap:12px; margin-bottom:10px;">${pontos}</div>
+        <div style="font-size:12px; color:var(--text-secondary); font-family:var(--font-mono);">Sequência: ${sequencia.join(' → ')}</div>
+      `;
+    }
+
+    return `
+      <div style="font-size:11px; color:var(--text-tertiary); font-family:var(--font-mono); margin-bottom:6px;">TIPO: ${tipo === 'PIN' ? 'PIN NUMÉRICO' : 'SENHA / TEXTO'}</div>
+      <div style="font-size:22px; font-weight:800; font-family:var(--font-mono); letter-spacing:2px; color:var(--text-primary);">${valor}</div>
+    `;
+  }
+
+  /** Mantém o espelho público (OS_PUBLICO) sincronizado — é o que a página consulta.html lê, sem exigir login. */
+  async function atualizarEspelhoPublico(os){
+    try {
+      const cliente = clientes.find(c => c.ID === os.CLIENTE_ID) || {};
+      const empresaPrincipal = (window.lojaAtivaId && empresas.find(e => e.ID === window.lojaAtivaId)) || empresas[0] || {};
+      await db.collection('OS_PUBLICO').doc(os.ID).set({
+        NUMERO_OS: os.NUMERO_OS, CODIGO: os.CODIGO_ACOMPANHAMENTO, STATUS: os.STATUS,
+        MARCA: os.MARCA||'', MODELO: os.MODELO||'', PRAZO: os.PRAZO||'', DATA_ABERTURA: os.DATA_ABERTURA||'',
+        CLIENTE_NOME: cliente.NOME || '', NOME_LOJA: empresaPrincipal.NOME || ''
+      });
+    } catch (e) { /* não trava o fluxo principal se o espelho falhar */ }
+  }
+
+  /** Monta o link de acompanhamento pra mandar pro cliente. */
+  function linkAcompanhamento(os){
+    return window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'consulta.html?id=' + os.ID + '&codigo=' + (os.CODIGO_ACOMPANHAMENTO||'');
+  }
+
+  /** Abre o WhatsApp do cliente com uma mensagem pronta sobre o status atual da OS. */
+  function abrirWhatsApp(os){
+    const cliente = clientes.find(c => c.ID === os.CLIENTE_ID) || {};
+    const telefone = String(cliente.TELEFONE||'').replace(/\D/g,'');
+    if (!telefone) { mostrarToast('Este cliente não tem telefone cadastrado.', 'erro'); return; }
+    const numeroComPais = telefone.length <= 11 ? '55' + telefone : telefone;
+
+    const mensagens = {
+      'Pronto': `Olá, ${cliente.NOME||''}! Seu aparelho ${os.MARCA||''} ${os.MODELO||''} (OS ${os.NUMERO_OS}) já está pronto para retirada! Acompanhe: ${linkAcompanhamento(os)}`,
+      'Entregue': `Olá, ${cliente.NOME||''}! Confirmando a entrega do seu aparelho ${os.MARCA||''} ${os.MODELO||''} (OS ${os.NUMERO_OS}). Obrigado pela confiança!`
+    };
+    const texto = mensagens[os.STATUS] || `Olá, ${cliente.NOME||''}! Sua OS ${os.NUMERO_OS} (${os.MARCA||''} ${os.MODELO||''}) está com status "${os.STATUS}". Acompanhe: ${linkAcompanhamento(os)}`;
+
+    window.open('https://wa.me/' + numeroComPais + '?text=' + encodeURIComponent(texto), '_blank');
+  }
+  let senhaTipoAtual = 'PIN', sequenciaPadrao = [];
+  let defeitosFrenteNova = [], defeitosVersoNova = [];
+  let mesCalendario = new Date();
+
+  function renderDiagrama(containerId, defeitosArray, editavel){
+    const container = document.getElementById(containerId);
+    container.innerHTML = `<svg viewBox="0 0 140 280" width="120" height="240" class="phone-svg" style="background:var(--bg-elevated); cursor:${editavel?'crosshair':'default'};">
+      <rect x="4" y="4" width="132" height="272" rx="22" fill="none" stroke="var(--hairline)" stroke-width="2.5"/>
+      <rect x="16" y="18" width="108" height="244" rx="10" fill="rgba(47,225,168,0.04)" stroke="var(--hairline)" stroke-width="1"/>
+    </svg>`;
+    const svg = container.querySelector('svg');
+    defeitosArray.forEach((d) => desenharMarcador(svg, d));
+
+    if (editavel) {
+      svg.addEventListener('click', (e) => {
+        const rect = svg.getBoundingClientRect();
+        const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+        const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+        const nota = prompt('Descreva a avaria já existente (ex.: risco na tela, rachadura no canto):');
+        if (!nota) return;
+        const novo = { x: Number(xPct.toFixed(1)), y: Number(yPct.toFixed(1)), nota };
+        defeitosArray.push(novo);
+        desenharMarcador(svg, novo);
+      });
+    }
+  }
+
+  function desenharMarcador(svg, d){
+    const ns = 'http://www.w3.org/2000/svg';
+    const circle = document.createElementNS(ns, 'circle');
+    circle.setAttribute('cx', d.x + '%');
+    circle.setAttribute('cy', d.y + '%');
+    circle.setAttribute('r', '5');
+    circle.setAttribute('fill', '#FF5C5C');
+    circle.setAttribute('stroke', '#fff');
+    circle.setAttribute('stroke-width', '1.2');
+    circle.style.cursor = 'pointer';
+    circle.addEventListener('click', (e) => { e.stopPropagation(); alert('Avaria: ' + d.nota); });
+    svg.appendChild(circle);
+  }
+
+  async function carregar(){
+    try {
+      if (!(await checarPermissao('ASSISTENCIA','VISUALIZAR'))){ setHTML('kanban', 'Sem permissão.'); return; }
+      clientes = await dbGetAll('CLIENTES');
+      empresas = await dbGetAll('EMPRESAS');
+      ordens = await dbGetAll('ASSISTENCIAS');
+      setHTML('fCliente', '<option value="">Selecione…</option>' + clientes.map(c => `<option value="${c.ID}">${c.NOME}</option>`).join(''));
+      renderKanban();
+      renderCalendario();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  }
+
+  function nomeCliente(id){ const c = clientes.find(x => x.ID === id); return c ? c.NOME : '—'; }
+
+  function ordensFiltradas(){
+    const termo = document.getElementById('filtroBuscaAssist').value.trim().toLowerCase();
+    const de = document.getElementById('filtroDeAssist').value;
+    const ate = document.getElementById('filtroAteAssist').value;
+    const soPendente = document.getElementById('filtroPagamentoPendente').checked;
+    return ordens.filter(o => {
+      if (termo) {
+        const alvo = [o.NUMERO_OS, o.MARCA, o.MODELO, nomeCliente(o.CLIENTE_ID)].filter(Boolean).join(' ').toLowerCase();
+        if (!alvo.includes(termo)) return false;
+      }
+      if (de || ate) {
+        const dataOS = o.DATA_ABERTURA ? new Date(o.DATA_ABERTURA) : null;
+        if (!dataOS) return false;
+        if (de && dataOS < new Date(de + 'T00:00:00')) return false;
+        if (ate && dataOS > new Date(ate + 'T23:59:59')) return false;
+      }
+      if (soPendente && saldoPendenteOS(o) <= 0) return false;
+      return true;
+    });
+  }
+  ['filtroBuscaAssist','filtroDeAssist','filtroAteAssist','filtroPagamentoPendente'].forEach(id => document.getElementById(id).addEventListener('input', renderKanban));
+  document.getElementById('btnLimparFiltroAssist').addEventListener('click', () => {
+    document.getElementById('filtroBuscaAssist').value = ''; document.getElementById('filtroDeAssist').value = ''; document.getElementById('filtroAteAssist').value = '';
+    document.getElementById('filtroPagamentoPendente').checked = false;
+    renderKanban();
+  });
+
+  function cartaoOS(o){
+    const ehDevolucao = o.STATUS === 'Com Defeito - Devolução';
+    const estiloExtra = ehDevolucao ? 'border-color:var(--red); background:rgba(255,92,92,0.08);' : '';
+    const corNumero = ehDevolucao ? 'var(--red)' : 'var(--mint)';
+    return `<div class="kanban-card" style="${estiloExtra}" onclick="window.__abrirOS('${o.ID}')">
+      <div style="color:${corNumero}; font-family:var(--font-mono); font-size:11px;">${o.NUMERO_OS}</div>
+      <b>${o.MARCA||''} ${o.MODELO||''}</b>
+      <div style="color:var(--text-tertiary);">${o.DEFEITO_INFORMADO||''}</div>
+      ${ehDevolucao ? '<div style="color:var(--red); font-size:10.5px; font-weight:700; margin-top:4px;">⚠ Devolução sem reparo</div>' : ''}
+    </div>`;
+  }
+
+  function renderKanban(){
+    const lista = ordensFiltradas();
+    setHTML('kanban', STATUS_COLUNAS.map(status => {
+      const doStatus = lista.filter(o => o.STATUS === status);
+      const tituloColuna = status === 'Com Defeito - Devolução' ? `<h4 style="color:var(--red);">⚠ ${status} (${doStatus.length})</h4>` : `<h4>${status} (${doStatus.length})</h4>`;
+      if (!doStatus.length) return `<div class="kanban-col">${tituloColuna}<div style="color:var(--text-tertiary); font-size:11.5px;">Nenhuma OS.</div></div>`;
+
+      // A coluna "Entregue" costuma acumular muita coisa com o tempo — fica recolhida, com uma seta pra abrir quando quiser ver.
+      if (status === 'Entregue') {
+        return `<div class="kanban-col">${tituloColuna}
+          <div class="entregues-toggle" id="toggleEntregues">
+            <span><span class="seta">▶</span> ${doStatus.length} entregue${doStatus.length>1?'s':''} — clique pra ver</span>
+          </div>
+          <div class="entregues-lista" id="listaEntregues">${doStatus.map(cartaoOS).join('')}</div>
+        </div>`;
+      }
+      return `<div class="kanban-col">${tituloColuna}${doStatus.map(cartaoOS).join('')}</div>`;
+    }).join(''));
+
+    const toggle = document.getElementById('toggleEntregues');
+    if (toggle) toggle.addEventListener('click', () => {
+      toggle.classList.toggle('aberto');
+      document.getElementById('listaEntregues').classList.toggle('aberto');
+    });
+  }
+
+  function renderCalendario(){
+    const ano = mesCalendario.getFullYear(), mes = mesCalendario.getMonth();
+    document.getElementById('calTitulo').textContent = mesCalendario.toLocaleDateString('pt-BR', { month:'long', year:'numeric' });
+
+    const primeiroDia = new Date(ano, mes, 1);
+    const inicioGrid = new Date(primeiroDia);
+    inicioGrid.setDate(inicioGrid.getDate() - ((primeiroDia.getDay() + 6) % 7));
+
+    const hojeStr = new Date().toDateString();
+    const labels = ['SEG','TER','QUA','QUI','SEX','SÁB','DOM'];
+    let html = labels.map(l => `<div class="cal-dia-label">${l}</div>`).join('');
+
+    for (let i = 0; i < 42; i++) {
+      const dia = new Date(inicioGrid); dia.setDate(dia.getDate() + i);
+      const foraMes = dia.getMonth() !== mes;
+      const ehHoje = dia.toDateString() === hojeStr;
+      const osDoDia = ordens.filter(o => o.PRAZO && parseDataLocal(o.PRAZO).toDateString() === dia.toDateString());
+
+      html += `<div class="cal-dia ${foraMes?'fora-mes':''} ${ehHoje?'hoje':''}" onclick='window.__verDiaCalendario(${JSON.stringify(osDoDia.map(o=>o.ID))})'>
+        <div class="num">${dia.getDate()}</div>
+        ${osDoDia.slice(0,3).map(o => `<span class="os-chip">${o.NUMERO_OS}</span>`).join('')}
+        ${osDoDia.length > 3 ? '<span style="font-size:9.5px; color:var(--text-tertiary);">+' + (osDoDia.length-3) + '</span>' : ''}
+      </div>`;
+    }
+    setHTML('calGrid', html);
+  }
+
+  window.__verDiaCalendario = (idsOS) => {
+    if (!idsOS.length) return;
+    if (idsOS.length === 1) { window.__abrirOS(idsOS[0]); return; }
+    const escolha = prompt('OS com entrega neste dia:\n' + idsOS.map((id,i) => (i+1)+') '+ordens.find(o=>o.ID===id).NUMERO_OS).join('\n') + '\n\nDigite o número pra abrir:');
+    const idx = Number(escolha) - 1;
+    if (idsOS[idx]) window.__abrirOS(idsOS[idx]);
+  };
+
+  document.getElementById('btnMesAnterior').addEventListener('click', () => { mesCalendario.setMonth(mesCalendario.getMonth()-1); renderCalendario(); });
+  document.getElementById('btnMesSeguinte').addEventListener('click', () => { mesCalendario.setMonth(mesCalendario.getMonth()+1); renderCalendario(); });
+
+  document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); tab.classList.add('active');
+    document.querySelectorAll('.view-panel').forEach(p=>p.classList.remove('active'));
+    document.getElementById('view' + tab.dataset.view.charAt(0).toUpperCase() + tab.dataset.view.slice(1)).classList.add('active');
+  }));
+
+  const gridNovo = document.getElementById('patternGrid');
+  for (let i=1;i<=9;i++){
+    const dot = document.createElement('div'); dot.className='pattern-dot';
+    dot.addEventListener('click', () => {
+      if (sequenciaPadrao.includes(i)) return;
+      sequenciaPadrao.push(i); dot.classList.add('active');
+      dot.textContent = sequenciaPadrao.length;
+      document.getElementById('patternSeq').textContent = sequenciaPadrao.join(' → ');
+    });
+    gridNovo.appendChild(dot);
+  }
+  document.getElementById('btnLimparPadrao').addEventListener('click', limparPadraoDesenho);
+  document.querySelectorAll('.senha-tabs button').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.senha-tabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); senhaTipoAtual = btn.dataset.tipo;
+    document.getElementById('senhaPinWrap').style.display = senhaTipoAtual==='PIN'?'block':'none';
+    document.getElementById('senhaTextoWrap').style.display = senhaTipoAtual==='TEXTO'?'block':'none';
+    document.getElementById('senhaPadraoWrap').style.display = senhaTipoAtual==='PADRAO'?'block':'none';
+  }));
+
+  const modalNova = document.getElementById('modalNova');
+  /** Limpa a sequência do padrão de desenho — usada ao abrir um cadastro novo e no botão "Limpar padrão". */
+  function limparPadraoDesenho(){
+    sequenciaPadrao = [];
+    document.getElementById('patternSeq').textContent = '—';
+    document.querySelectorAll('#patternGrid .pattern-dot').forEach(d => { d.classList.remove('active'); d.textContent = ''; });
+  }
+
+  document.getElementById('btnNovaOS').addEventListener('click', () => {
+    defeitosFrenteNova = []; defeitosVersoNova = [];
+    ['fCliente','fTecnico','fMarca','fModelo','fImei','fAcessorios','fDefeito','fDiagnostico','fValor','fPrazo','fSenhaPin','fSenhaTexto'].forEach(id => document.getElementById(id).value = '');
+    limparPadraoDesenho();
+    gerarLinhasPecas('linhasPecasNova', 'totalPecasNova', []);
+    renderDiagrama('diagramaFrenteNova', defeitosFrenteNova, true);
+    renderDiagrama('diagramaVersoNova', defeitosVersoNova, true);
+    checklistRespostas = {};
+    renderChecklist();
+    semTeste = false;
+    document.getElementById('chkSemTeste').checked = false;
+    document.querySelector('.checklist-funcional').classList.remove('desabilitado');
+    document.getElementById('explicacaoSemTeste').style.display = 'none';
+    document.getElementById('checklistTituloNova').innerHTML = 'Os itens abaixo estão funcionando? <span style="color:var(--red);">*</span>';
+    modalNova.classList.add('open');
+  });
+  document.getElementById('fecharModalNova').addEventListener('click', () => modalNova.classList.remove('open'));
+  document.getElementById('btnCancelarNova').addEventListener('click', () => modalNova.classList.remove('open'));
+
+  document.getElementById('btnSalvarNova').addEventListener('click', async () => {
+    const cliente = document.getElementById('fCliente').value;
+    const defeito = document.getElementById('fDefeito').value.trim();
+    if (!cliente || !defeito){ mostrarToast('Cliente e defeito informado são obrigatórios.', 'erro'); return; }
+
+    if (!semTeste) {
+      const itensSemResposta = ITENS_CHECKLIST.filter(item => !checklistRespostas[item]);
+      if (itensSemResposta.length) {
+        renderChecklist();
+        document.querySelector('.checklist-funcional').scrollIntoView({ behavior:'smooth', block:'center' });
+        mostrarToast('Responda todos os itens do checklist antes de abrir a OS (faltam ' + itensSemResposta.length + '), ou marque "Sem teste".', 'erro');
+        return;
+      }
+    }
+
+    let senhaValor = senhaTipoAtual==='PIN' ? document.getElementById('fSenhaPin').value.trim()
+      : senhaTipoAtual==='TEXTO' ? document.getElementById('fSenhaTexto').value.trim()
+      : sequenciaPadrao.join(',');
+
+    try {
+      if (!(await checarPermissao('ASSISTENCIA','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      const ano = new Date().getFullYear();
+      const totalAno = ordens.filter(o => String(o.NUMERO_OS).startsWith('OS-'+ano)).length;
+      const numeroOS = 'OS-' + ano + '-' + String(totalAno+1).padStart(5,'0');
+
+      const codigoAcompanhamento = Math.random().toString(36).substring(2,8).toUpperCase();
+      const pecas = coletarPecas('linhasPecasNova');
+
+      const novaOS = await dbInsert('ASSISTENCIAS', {
+        NUMERO_OS: numeroOS, CLIENTE_ID: cliente, TECNICO_RESPONSAVEL: document.getElementById('fTecnico').value.trim(),
+        MARCA: document.getElementById('fMarca').value.trim(), MODELO: document.getElementById('fModelo').value.trim(),
+        IMEI: document.getElementById('fImei').value.trim(), ACESSORIOS_ENTREGUES: document.getElementById('fAcessorios').value.trim(),
+        DEFEITO_INFORMADO: defeito, DIAGNOSTICO: document.getElementById('fDiagnostico').value.trim(),
+        PECAS_A_REPOR: pecas.texto, PECAS_ITENS: JSON.stringify(pecas.itens), VALOR_PECAS: pecas.total,
+        VALOR_SERVICO: Number(document.getElementById('fValor').value)||0,
+        PRAZO: document.getElementById('fPrazo').value, SENHA_TIPO: senhaTipoAtual, SENHA_VALOR: senhaValor,
+        DEFEITOS_FRENTE: JSON.stringify(defeitosFrenteNova), DEFEITOS_VERSO: JSON.stringify(defeitosVersoNova),
+        CHECKLIST_FUNCIONAL: JSON.stringify(checklistRespostas), CHECKLIST_SEM_TESTE: semTeste,
+        CODIGO_ACOMPANHAMENTO: codigoAcompanhamento,
+        STATUS: 'Aberta', DATA_ABERTURA: new Date().toISOString(), DATA_ENTREGA_REAL: ''
+      });
+      await atualizarEspelhoPublico(novaOS);
+      mostrarToast('OS ' + numeroOS + ' aberta.');
+      modalNova.classList.remove('open'); carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  const modalVer = document.getElementById('modalVer');
+  let osAtual = null;
+
+  window.__abrirOS = (id) => {
+    osAtual = ordens.find(o => o.ID === id);
+    if (!osAtual) return;
+    document.getElementById('verTitulo').textContent = osAtual.NUMERO_OS + ' — ' + nomeCliente(osAtual.CLIENTE_ID);
+
+    const defFrente = JSON.parse(osAtual.DEFEITOS_FRENTE || '[]');
+    const defVerso = JSON.parse(osAtual.DEFEITOS_VERSO || '[]');
+
+    setHTML('verCorpo', `
+      <div class="section-title">Comunicação com o cliente</div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
+        <button class="btn btn-primary" id="btnWhatsAppOS" type="button">💬 Enviar WhatsApp</button>
+        <span style="font-size:11px; color:var(--text-tertiary); font-family:var(--font-mono);">Link: ${linkAcompanhamento(osAtual)}</span>
+      </div>
+      <div class="section-title">Status e prazo</div>
+      <div class="frow2">
+        <div class="ffield"><label>Status</label><select id="vStatus">${STATUS_COLUNAS.map(s => `<option value="${s}" ${s===osAtual.STATUS?'selected':''}>${s}</option>`).join('')}</select></div>
+        <div class="ffield"><label>Previsão de entrega</label><input id="vPrazo" type="date" value="${osAtual.PRAZO||''}"></div>
+      </div>
+      <div class="ffield" id="wrapObsDevolucao" style="display:none; background:rgba(255,92,92,0.08); border:1px solid var(--red); border-radius:10px; padding:12px 14px;">
+        <label style="color:var(--red);">⚠ O que houve? (obrigatório pra devolução)</label>
+        <textarea id="vObsDevolucao" style="width:100%; min-height:70px; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; font-family:inherit; box-sizing:border-box;" placeholder="Ex.: peça não compatível, defeito na placa que não compensa o reparo, cliente desistiu do orçamento...">${osAtual.OBSERVACAO_DEVOLUCAO||''}</textarea>
+      </div>
+      <div class="section-title">🔒 Desbloqueio do aparelho</div>
+      <div id="visualizacaoSenha" style="background:var(--bg-elevated); border:1px solid var(--hairline); border-radius:10px; padding:14px 16px; margin-bottom:16px;"></div>
+      <div class="section-title">Aparelho</div>
+      <div class="frow3">
+        <div class="ffield"><label>Marca</label><input id="vMarca" value="${osAtual.MARCA||''}"></div>
+        <div class="ffield"><label>Modelo</label><input id="vModelo" value="${osAtual.MODELO||''}"></div>
+        <div class="ffield"><label>IMEI/série</label><input id="vImei" value="${osAtual.IMEI||''}"></div>
+      </div>
+      <div class="section-title">Diagnóstico e serviço</div>
+      <div class="ffield"><label>Defeito informado</label><textarea id="vDefeito">${osAtual.DEFEITO_INFORMADO||''}</textarea></div>
+      <div class="ffield"><label>Diagnóstico técnico</label><textarea id="vDiagnostico">${osAtual.DIAGNOSTICO||''}</textarea></div>
+      <div class="ffield"><label>Peças a repor</label>
+        <table class="tabela-pecas">
+          <thead><tr><th>Peça</th><th style="width:130px;">Preço (R$)</th></tr></thead>
+          <tbody id="linhasPecasVer"></tbody>
+          <tfoot><tr><td style="text-align:right; font-weight:600;">Total das peças:</td><td style="font-weight:700;" id="totalPecasVer">R$ 0,00</td></tr></tfoot>
+        </table>
+      </div>
+      <div class="section-title">🔍 Problemas identificados após o reparo (pós-teste)</div>
+      <p style="color:var(--text-secondary); font-size:12px; margin:0 0 10px;">Pra quando o aparelho chegou sem poder ser testado (ex.: não ligava) e, depois de consertar o problema principal, você percebe outro defeito — tipo alto-falante, câmera, etc. Fica registrado separado do checklist de entrada, com a data e se o cliente já foi avisado.</p>
+      <div id="listaPosTeste" style="margin-bottom:10px;"></div>
+      <div id="formNovoPosTeste" style="display:none; background:var(--bg-elevated); border:1px solid var(--hairline); border-radius:10px; padding:14px 16px; margin-bottom:12px;">
+        <div class="ffield"><label>O que foi identificado?</label><textarea id="fPosTesteDescricao" style="min-height:50px;" placeholder="Ex.: Alto-falante com chiado, identificado ao testar após a troca de tela"></textarea></div>
+        <div class="frow2">
+          <div class="ffield"><label>Valor estimado do reparo (R$, opcional)</label><input id="fPosTesteValor" type="number" step="0.01"></div>
+          <div class="ffield"><label style="display:flex; align-items:center; gap:6px; margin-top:20px;"><input type="checkbox" id="fPosTesteComunicado"> Já avisei o cliente</label></div>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+          <button class="btn" type="button" id="btnCancelarPosTeste">Cancelar</button>
+          <button class="btn btn-primary" type="button" id="btnSalvarPosTeste">Salvar achado</button>
+        </div>
+      </div>
+      <button class="btn" type="button" id="btnNovoPosTeste" style="margin-bottom:16px;">+ Registrar problema pós-teste</button>
+
+      <div class="frow2">
+        <div class="ffield"><label>Valor do serviço (R$)</label><input id="vValor" type="number" step="0.01" value="${osAtual.VALOR_SERVICO||0}"></div>
+        <div class="ffield"><label>Técnico responsável</label><input id="vTecnico" value="${osAtual.TECNICO_RESPONSAVEL||''}"></div>
+      </div>
+      <div class="section-title">💰 Status do pagamento</div>
+      <div id="areaPagamentoOS" style="background:var(--bg-elevated); border:1px solid var(--hairline); border-radius:10px; padding:14px 16px; margin-bottom:16px;"></div>
+      <div class="section-title">Estado do aparelho na entrada (registrado na abertura)</div>
+      <div class="estado-entrada-wrap">
+        <div class="diagramas-wrap">
+          <div class="diagrama-col"><div class="titulo">FRENTE</div><div id="diagramaFrenteVer"></div></div>
+          <div class="diagrama-col"><div class="titulo">VERSO</div><div id="diagramaVersoVer"></div></div>
+        </div>
+        <div class="checklist-funcional">
+          <div class="checklist-titulo">Checklist funcional (registrado na abertura)</div>
+          <div id="listaChecklistVer"></div>
+        </div>
+      </div>
+    `);
+
+    renderDiagrama('diagramaFrenteVer', defFrente, false);
+    renderDiagrama('diagramaVersoVer', defVerso, false);
+    renderChecklistLeitura(osAtual.CHECKLIST_FUNCIONAL, osAtual.CHECKLIST_SEM_TESTE);
+    setHTML('visualizacaoSenha', montarVisualizacaoSenha(osAtual.SENHA_TIPO, osAtual.SENHA_VALOR));
+    renderAreaPagamento(osAtual);
+    renderListaPosTeste(osAtual);
+    ligarEventosPosTeste();
+
+    // Mostra/esconde o campo de observação conforme o status escolhido.
+    const selectStatus = document.getElementById('vStatus');
+    const wrapObs = document.getElementById('wrapObsDevolucao');
+    function atualizarVisibilidadeObsDevolucao(){ wrapObs.style.display = selectStatus.value === 'Com Defeito - Devolução' ? 'block' : 'none'; }
+    atualizarVisibilidadeObsDevolucao();
+    selectStatus.addEventListener('change', atualizarVisibilidadeObsDevolucao);
+
+    let itensPecasExistentes = [];
+    try { itensPecasExistentes = JSON.parse(osAtual.PECAS_ITENS || '[]'); } catch (e) { itensPecasExistentes = []; }
+    if (!itensPecasExistentes.length && osAtual.PECAS_A_REPOR) itensPecasExistentes = [{ nome: osAtual.PECAS_A_REPOR, preco: '' }];
+    gerarLinhasPecas('linhasPecasVer', 'totalPecasVer', itensPecasExistentes);
+
+    modalVer.classList.add('open');
+    document.getElementById('btnWhatsAppOS').addEventListener('click', () => abrirWhatsApp(osAtual));
+  };
+
+  document.getElementById('fecharModalVer').addEventListener('click', () => modalVer.classList.remove('open'));
+  document.getElementById('btnFecharVer').addEventListener('click', () => modalVer.classList.remove('open'));
+
+  document.getElementById('btnSalvarVer').addEventListener('click', async () => {
+    if (!osAtual) return;
+    try {
+      if (!(await checarPermissao('ASSISTENCIA','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      const novoStatus = document.getElementById('vStatus').value;
+      const obsDevolucao = document.getElementById('vObsDevolucao').value.trim();
+      if (novoStatus === 'Com Defeito - Devolução' && !obsDevolucao) {
+        mostrarToast('Descreve o que houve antes de marcar como devolução.', 'erro');
+        document.getElementById('vObsDevolucao').focus();
+        return;
+      }
+      const pecasVer = coletarPecas('linhasPecasVer');
+      const dados = {
+        STATUS: novoStatus, PRAZO: document.getElementById('vPrazo').value,
+        OBSERVACAO_DEVOLUCAO: novoStatus === 'Com Defeito - Devolução' ? obsDevolucao : (osAtual.OBSERVACAO_DEVOLUCAO || ''),
+        MARCA: document.getElementById('vMarca').value.trim(), MODELO: document.getElementById('vModelo').value.trim(),
+        IMEI: document.getElementById('vImei').value.trim(), DEFEITO_INFORMADO: document.getElementById('vDefeito').value.trim(),
+        DIAGNOSTICO: document.getElementById('vDiagnostico').value.trim(),
+        PECAS_A_REPOR: pecasVer.texto, PECAS_ITENS: JSON.stringify(pecasVer.itens), VALOR_PECAS: pecasVer.total,
+        VALOR_SERVICO: Number(document.getElementById('vValor').value)||0, TECNICO_RESPONSAVEL: document.getElementById('vTecnico').value.trim()
+      };
+      if (novoStatus === 'Entregue' && !osAtual.DATA_ENTREGA_REAL) dados.DATA_ENTREGA_REAL = new Date().toISOString();
+
+      await dbUpdate('ASSISTENCIAS', osAtual.ID, dados);
+      await atualizarEspelhoPublico(Object.assign({}, osAtual, dados));
+      mostrarToast('OS atualizada.');
+      modalVer.classList.remove('open');
+      carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  // ---------- Vias da OS (mesmo padrão do orçamento: grade com bordas, tudo numa folha A4) ----------
+
+  /** Via da loja: TODA a informação — cliente completo, aparelho, senha, checklist, peças e assinaturas. */
+  function desenharViaOS_Loja(doc, os, cliente, logo, yTopo){
+    const xEsq = 15, xDir = 195, largura = xDir - xEsq;
+    let y = yTopo;
+    y = desenharCabecalhoCompactoOS(doc, os, logo, y, '1ª VIA — LOJA');
+
+    function celula(label, valor, x, larg, yc, alt){
+      doc.setDrawColor(150); doc.setLineWidth(0.25); doc.rect(x, yc, larg, alt);
+      doc.setFontSize(6.2); doc.setFont(undefined,'normal'); doc.setTextColor(130);
+      doc.text(label, x+1.5, yc+3);
+      doc.setFontSize(8); doc.setFont(undefined,'normal'); doc.setTextColor(20);
+      doc.text(String(valor||'—').substring(0,50), x+1.5, yc+6.2);
+    }
+
+    const h1 = 7.5;
+    celula('CLIENTE', cliente.NOME, xEsq, largura*0.45, y, h1);
+    celula('TELEFONE', cliente.TELEFONE, xEsq+largura*0.45, largura*0.30, y, h1);
+    celula('CPF', cliente.CPF, xEsq+largura*0.75, largura*0.25, y, h1);
+    y += h1;
+
+    celula('APARELHO', (os.MARCA||'')+' '+(os.MODELO||''), xEsq, largura*0.36, y, h1);
+    celula('IMEI / Nº SÉRIE', os.IMEI, xEsq+largura*0.36, largura*0.24, y, h1);
+    celula('TÉCNICO', os.TECNICO_RESPONSAVEL, xEsq+largura*0.60, largura*0.18, y, h1);
+    celula('PREVISÃO DE ENTREGA', os.PRAZO ? parseDataLocal(os.PRAZO).toLocaleDateString('pt-BR') : '—', xEsq+largura*0.78, largura*0.22, y, h1);
+    y += h1;
+
+    celula('ACESSÓRIOS ENTREGUES', os.ACESSORIOS_ENTREGUES, xEsq, largura, y, h1);
+    y += h1;
+
+    const alturaDefeito = 10;
+    doc.setDrawColor(150); doc.rect(xEsq, y, largura, alturaDefeito);
+    doc.setFontSize(6.2); doc.setTextColor(130); doc.text('DEFEITO RELATADO', xEsq+1.5, y+3);
+    doc.setFontSize(7.5); doc.setFont(undefined,'normal'); doc.setTextColor(20);
+    doc.text(doc.splitTextToSize(os.DEFEITO_INFORMADO || '—', largura-3).slice(0,2), xEsq+1.5, y+6.2);
+    y += alturaDefeito;
+
+    // Senha do aparelho — só na via da loja, o técnico precisa pra acessar o aparelho.
+    // Quando é padrão de desenho, mostra a grade de pontos desenhada de verdade, com o
+    // número da ordem em cada um — fica muito mais fácil de reproduzir do que só o texto.
+    const ehPadrao = os.SENHA_TIPO === 'PADRAO' && os.SENHA_VALOR;
+    const alturaSenha = ehPadrao ? 17 : 7.5;
+    doc.setDrawColor(150); doc.rect(xEsq, y, largura, alturaSenha);
+    doc.setFontSize(6.2); doc.setFont(undefined,'normal'); doc.setTextColor(130);
+    doc.text('SENHA / DESBLOQUEIO DO APARELHO', xEsq+1.5, y+3);
+
+    if (ehPadrao) {
+      const sequencia = os.SENHA_VALOR.split(',').map(Number);
+      doc.setFontSize(8); doc.setFont(undefined,'bold'); doc.setTextColor(20);
+      doc.text('Padrão: ' + sequencia.join(' → '), xEsq+1.5, y+7.5);
+
+      // Grade 3x3 de pontos, à direita da célula, com o número da ordem em cada um marcado.
+      const raio = 1.8, espaco = 5.5, xGrade = xEsq + largura - (espaco*2 + raio*2) - 4, yGrade = y + 6;
+      for (let pos = 1; pos <= 9; pos++) {
+        const col = (pos-1) % 3, lin = Math.floor((pos-1)/3);
+        const cx = xGrade + col*espaco, cy = yGrade + lin*espaco;
+        const ordem = sequencia.indexOf(pos);
+        const ativo = ordem !== -1;
+        doc.setDrawColor(ativo ? 30 : 180); doc.setLineWidth(0.3);
+        if (ativo) { doc.setFillColor(226,64,28); doc.circle(cx, cy, raio, 'FD'); }
+        else { doc.circle(cx, cy, raio, 'D'); }
+        if (ativo) {
+          doc.setFontSize(5.5); doc.setFont(undefined,'bold'); doc.setTextColor(255,255,255);
+          doc.text(String(ordem+1), cx, cy+0.8, { align:'center' });
+        }
+      }
+      doc.setTextColor(20);
+    } else {
+      doc.setFontSize(8.5); doc.setFont(undefined,'bold'); doc.setTextColor(20);
+      const textoSenha = !os.SENHA_TIPO || !os.SENHA_VALOR ? '—' : (os.SENHA_TIPO === 'PIN' ? 'PIN: ' : 'Senha: ') + os.SENHA_VALOR;
+      doc.text(textoSenha, xEsq+1.5, y+6.2);
+    }
+    y += alturaSenha + 3;
+
+    // Checklist funcional — grade compacta em 3 colunas (ou aviso de "sem teste", se marcado na abertura).
+    doc.setFontSize(7); doc.setFont(undefined,'bold'); doc.setTextColor(20);
+    doc.text('CHECKLIST FUNCIONAL (registrado na abertura)', xEsq, y); y += 3.5;
+
+    if (os.CHECKLIST_SEM_TESTE) {
+      doc.setFontSize(7); doc.setFont(undefined,'bold'); doc.setTextColor(200,140,20);
+      doc.text('Aparelho recebido sem teste — checklist não se aplica a essa OS.', xEsq, y);
+      doc.setTextColor(20);
+      y += 6;
+    } else {
+      let respostasChecklist = {};
+      try { respostasChecklist = os.CHECKLIST_FUNCIONAL ? JSON.parse(os.CHECKLIST_FUNCIONAL) : {}; } catch(e) {}
+      const RESP_ABREV = { SIM:'Sim', NAO:'Não', NA:'N/A' };
+      const colunas = 3, larguraColChecklist = largura / colunas;
+      doc.setFontSize(6.3); doc.setFont(undefined,'normal');
+      ITENS_CHECKLIST.forEach((item, i) => {
+        const col = i % colunas, linha = Math.floor(i / colunas);
+        const xItem = xEsq + col*larguraColChecklist, yItem = y + linha*4;
+        const resp = respostasChecklist[item] ? RESP_ABREV[respostasChecklist[item]] : '—';
+        doc.setTextColor(90); doc.text(item.substring(0,26), xItem, yItem);
+        const corResp = resp==='Sim' ? [30,150,110] : resp==='Não' ? [200,60,60] : [120,120,120];
+        doc.setTextColor(corResp[0], corResp[1], corResp[2]);
+        doc.setFont(undefined,'bold'); doc.text(resp, xItem + larguraColChecklist - 8, yItem);
+        doc.setFont(undefined,'normal');
+      });
+      y += Math.ceil(ITENS_CHECKLIST.length/colunas)*4 + 4;
+    }
+
+    // Problemas identificados depois do reparo (pós-teste) — só aparece se tiver algum registrado.
+    let achadosPosTeste = [];
+    try { achadosPosTeste = JSON.parse(os.PROBLEMAS_POS_TESTE || '[]'); } catch(e) {}
+    if (achadosPosTeste.length) {
+      doc.setFontSize(7); doc.setFont(undefined,'bold'); doc.setTextColor(200,140,20);
+      doc.text('⚠ PROBLEMAS IDENTIFICADOS APÓS O REPARO (PÓS-TESTE)', xEsq, y); y += 4;
+      doc.setFontSize(7); doc.setFont(undefined,'normal'); doc.setTextColor(20);
+      achadosPosTeste.forEach(a => {
+        const linhaTexto = doc.splitTextToSize('• ' + a.descricao + (a.valorEstimado ? ' (' + moeda(a.valorEstimado) + ')' : '') + ' — ' + (a.comunicadoCliente ? 'cliente avisado' : 'cliente NÃO avisado ainda'), largura);
+        doc.text(linhaTexto, xEsq, y);
+        y += linhaTexto.length * 3.4 + 1.5;
+      });
+      y += 2;
+    }
+
+    y = desenharTabelaPecasOS(doc, os, xEsq, xDir, largura, y);
+
+    y += 9;
+    doc.setDrawColor(20); doc.setLineWidth(0.3);
+    doc.line(xEsq+4, y, xEsq+largura*0.46, y);
+    doc.line(xEsq+largura*0.54, y, xDir-4, y);
+    doc.setFontSize(7); doc.setFont(undefined,'normal'); doc.setTextColor(100);
+    doc.text('Assinatura do Cliente', xEsq + largura*0.25, y+4, { align:'center' });
+    doc.text('Assinatura da Loja', xEsq + largura*0.75, y+4, { align:'center' });
+
+    return y + 8;
+  }
+
+  /** Via do cliente: o essencial — cliente, aparelho, peças e valor. Sem senha nem checklist. */
+  function desenharViaOS_Cliente(doc, os, cliente, logo, yTopo){
+    const xEsq = 15, xDir = 195, largura = xDir - xEsq;
+    let y = yTopo;
+    y = desenharCabecalhoCompactoOS(doc, os, logo, y, '2ª VIA — CLIENTE');
+
+    function celula(label, valor, x, larg, yc, alt){
+      doc.setDrawColor(150); doc.setLineWidth(0.25); doc.rect(x, yc, larg, alt);
+      doc.setFontSize(6.2); doc.setFont(undefined,'normal'); doc.setTextColor(130);
+      doc.text(label, x+1.5, yc+3);
+      doc.setFontSize(8); doc.setFont(undefined,'normal'); doc.setTextColor(20);
+      doc.text(String(valor||'—').substring(0,50), x+1.5, yc+6.2);
+    }
+
+    const h1 = 7.5;
+    celula('CLIENTE', cliente.NOME, xEsq, largura*0.62, y, h1);
+    celula('TELEFONE', cliente.TELEFONE, xEsq+largura*0.62, largura*0.38, y, h1);
+    y += h1;
+
+    celula('APARELHO', (os.MARCA||'')+' '+(os.MODELO||''), xEsq, largura*0.7, y, h1);
+    celula('PREVISÃO DE ENTREGA', os.PRAZO ? parseDataLocal(os.PRAZO).toLocaleDateString('pt-BR') : '—', xEsq+largura*0.7, largura*0.3, y, h1);
+    y += h1;
+
+    const alturaDefeito = 10;
+    doc.setDrawColor(150); doc.rect(xEsq, y, largura, alturaDefeito);
+    doc.setFontSize(6.2); doc.setTextColor(130); doc.text('DEFEITO RELATADO', xEsq+1.5, y+3);
+    doc.setFontSize(7.5); doc.setFont(undefined,'normal'); doc.setTextColor(20);
+    doc.text(doc.splitTextToSize(os.DEFEITO_INFORMADO || '—', largura-3).slice(0,2), xEsq+1.5, y+6.2);
+    y += alturaDefeito + 3;
+
+    y = desenharTabelaPecasOS(doc, os, xEsq, xDir, largura, y);
+
+    y += 6;
+    doc.setFontSize(7); doc.setFont(undefined,'normal'); doc.setTextColor(110);
+    doc.text('Guarde esta via — ela é necessária pra retirar o aparelho.', xEsq, y);
+
+    return y + 6;
+  }
+
+  /** Cabeçalho compacto (logo + nome + barra de degradê), reaproveitado nas duas vias. */
+  function desenharCabecalhoCompactoOS(doc, os, logo, yTopo, rotuloVia){
+    const xEsq = 15, xDir = 195, largura = xDir - xEsq;
+    let y = yTopo, xTextoMarca = xEsq;
+    if (logo) {
+      const areaAltura = 10, larguraFinal = areaAltura * (logo.largura / logo.altura);
+      doc.addImage(logo.url, 'PNG', xEsq, y - areaAltura + 2, larguraFinal, areaAltura);
+      xTextoMarca = xEsq + larguraFinal + 3;
+    }
+    doc.setFontSize(10.5); doc.setFont(undefined,'bold'); doc.setTextColor(226,64,28);
+    doc.text('BSTYLE - Eletrônicos & Acessórios', xTextoMarca, y);
+    doc.setFontSize(7); doc.setFont(undefined,'normal'); doc.setTextColor(130);
+    doc.text(rotuloVia, xDir, y - 3, { align:'right' });
+    doc.text('Impressão: ' + new Date().toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }), xDir, y, { align:'right' });
+    y += 4;
+
+    // Endereço, telefone e CNPJ das lojas — mesma informação que já aparece no Termo de Garantia.
+    const lojasCabecalho = (empresas || []).slice(0, 2);
+    doc.setFontSize(6.3); doc.setFont(undefined,'normal'); doc.setTextColor(90);
+    lojasCabecalho.forEach((emp, idx) => {
+      const endereco = [emp.RUA, emp.NUMERO].filter(Boolean).join(', ') + (emp.BAIRRO ? ' – ' + emp.BAIRRO : '');
+      const partes = ['Loja ' + (idx+1) + (endereco ? ' – ' + endereco : ''), emp.WHATSAPP ? 'Tel: ' + emp.WHATSAPP : '', emp.CNPJ ? 'CNPJ: ' + emp.CNPJ : ''].filter(Boolean);
+      doc.text(partes.join('   •   '), xTextoMarca, y);
+      y += 3.4;
+    });
+    if (!lojasCabecalho.length) { doc.text('Cadastre sua loja em Empresas pra completar esse cabeçalho.', xTextoMarca, y); y += 3.4; }
+    y += 2;
+
+    const corInicio = [226,64,28], corFim = [245,166,35], passos = 40, larguraFaixa = largura / passos;
+    for (let i = 0; i < passos; i++) {
+      const t = i / (passos - 1);
+      doc.setFillColor(Math.round(corInicio[0]+(corFim[0]-corInicio[0])*t), Math.round(corInicio[1]+(corFim[1]-corInicio[1])*t), Math.round(corInicio[2]+(corFim[2]-corInicio[2])*t));
+      doc.rect(xEsq + i*larguraFaixa, y, larguraFaixa+0.15, 0.9, 'F');
+    }
+    y += 5;
+
+    doc.setFontSize(12.5); doc.setFont(undefined,'bold'); doc.setTextColor(20);
+    doc.text('ORDEM DE SERVIÇO Nº ' + os.NUMERO_OS, 105, y, { align:'center' });
+    return y + 6;
+  }
+
+  /** Tabela de peças a repor — usada nas duas vias. */
+  function desenharTabelaPecasOS(doc, os, xEsq, xDir, largura, y){
+    let itens = [];
+    try { itens = JSON.parse(os.PECAS_ITENS || '[]').filter(i => i.nome || i.item); } catch(e) {}
+
+    doc.setFontSize(6.8); doc.setFont(undefined,'bold'); doc.setTextColor(255,255,255);
+    doc.setFillColor(60,60,60); doc.rect(xEsq, y, largura, 5, 'F');
+    doc.text('PEÇA A REPOR', xEsq+2, y+3.4);
+    doc.text('PREÇO', xDir-2, y+3.4, { align:'right' });
+    y += 5;
+    doc.setFont(undefined,'normal'); doc.setFontSize(7.5);
+    if (!itens.length) {
+      doc.setDrawColor(150); doc.rect(xEsq, y, largura, 5);
+      doc.setTextColor(150); doc.text(os.PECAS_A_REPOR || 'Nenhuma peça informada', xEsq+2, y+3.4);
+      y += 5;
+    } else {
+      itens.forEach(item => {
+        doc.setDrawColor(150); doc.rect(xEsq, y, largura, 5);
+        doc.setTextColor(20);
+        doc.text(String(item.nome||item.item||'').substring(0,62), xEsq+2, y+3.4);
+        doc.text(moeda(item.preco), xDir-2, y+3.4, { align:'right' });
+        y += 5;
+      });
+    }
+
+    doc.setDrawColor(150); doc.rect(xEsq, y, largura, 7);
+    doc.setFontSize(7); doc.setTextColor(130); doc.text('VALOR DO SERVIÇO', xEsq+2, y+4.6);
+    doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.setTextColor(226,64,28);
+    doc.text(moeda(os.VALOR_SERVICO), xDir-2, y+4.9, { align:'right' });
+    return y + 7;
+  }
+
+  /** Monta o PDF completo (as duas vias, mesma folha) — reaproveitado por Salvar e Imprimir. */
+  async function montarPdfOS(){
+    const cliente = clientes.find(c => c.ID === osAtual.CLIENTE_ID) || {};
+    let logo = null;
+    try { logo = await carregarLogoComoDataUrl(); } catch (e) { logo = null; }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+
+    desenharViaOS_Loja(doc, osAtual, cliente, logo, 20);
+    doc.setDrawColor(180); doc.setLineDashPattern([2,1.5], 0);
+    doc.line(15, 203, 195, 203);
+    doc.setLineDashPattern([], 0);
+    desenharViaOS_Cliente(doc, osAtual, cliente, logo, 211);
+
+    return doc;
+  }
+
+  // ---------- Imprimir ----------
+  document.getElementById('btnImprimirOS').addEventListener('click', async () => {
+    if (!osAtual) return;
+    try {
+      const doc = await montarPdfOS();
+      doc.autoPrint();
+      window.open(doc.output('bloburl'), '_blank');
+    } catch (e) { mostrarToast('Erro ao imprimir: ' + e.message, 'erro'); }
+  });
+
+  // ---------- Salvar PDF ----------
+  document.getElementById('btnPdfOS').addEventListener('click', async () => {
+    if (!osAtual) return;
+    try {
+      const doc = await montarPdfOS();
+      doc.save('OS_' + osAtual.NUMERO_OS + '.pdf');
+      mostrarToast('PDF da OS salvo (2 vias).');
+    } catch (e) { mostrarToast('Erro ao gerar PDF: ' + e.message, 'erro'); }
+  });
+
+  // ---------- Gerar garantia a partir da OS ----------
+  document.getElementById('btnGerarGarantiaOS').addEventListener('click', async () => {
+    if (!osAtual) return;
+    try {
+      if (!(await checarPermissao('GARANTIAS','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      await dbInsert('GARANTIAS', {
+        ASSISTENCIA_ID: osAtual.ID, CLIENTE_ID: osAtual.CLIENTE_ID, PRODUTO_DESCRICAO: (osAtual.MARCA||'')+' '+(osAtual.MODELO||''),
+        NUMERO_GARANTIA: gerarId('GAR'), PRAZO_DIAS: 90, TIPO: 'MANUTENCAO',
+        VALOR_SERVICO: osAtual.VALOR_SERVICO||0, DATA_CONCLUSAO: osAtual.DATA_ENTREGA_REAL || new Date().toISOString(),
+        SERVICO_DESCRICAO: osAtual.PECAS_A_REPOR || osAtual.DIAGNOSTICO || 'manutenção',
+        DATA_EMISSAO: new Date().toISOString(), STATUS: 'Ativa'
+      });
+      mostrarToast('Garantia gerada! Veja na aba Garantias.');
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  // ---------- Excluir OS ----------
+  document.getElementById('btnExcluirOS').addEventListener('click', async () => {
+    if (!osAtual) return;
+    if (!confirm('Excluir esta OS? Essa ação não pode ser desfeita.')) return;
+    try {
+      if (!(await checarPermissao('ASSISTENCIA','EXCLUIR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      await dbDelete('ASSISTENCIAS', osAtual.ID);
+      mostrarToast('OS excluída.');
+      modalVer.classList.remove('open');
+      carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  carregar();
+})();
+</script>

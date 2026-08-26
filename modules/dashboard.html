@@ -1,0 +1,206 @@
+<style>
+  .chart-card{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; padding:18px 20px; }
+  .chart-grid{ display:grid; grid-template-columns:1.4fr 1fr; gap:16px; margin-bottom:16px; }
+  @media (max-width: 980px){ .chart-grid{ grid-template-columns:1fr; } }
+  .mini-list{ list-style:none; margin:0; padding:0; }
+  .mini-list li{ display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--hairline); font-size:12.5px; }
+  .mini-list li:last-child{ border-bottom:none; }
+  .mini-list .qty{ font-family:var(--font-mono); color:var(--mint); }
+  .resumo-dia{ background:linear-gradient(135deg, rgba(47,225,168,0.08), rgba(76,141,255,0.05)); border:1px solid var(--hairline); border-radius:12px; padding:20px 22px; margin-bottom:20px; }
+  .resumo-dia h3{ font-family:var(--font-display); font-size:15px; margin:0 0 14px; }
+  .resumo-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:16px; }
+  .resumo-item .lbl{ font-size:11px; color:var(--text-tertiary); font-family:var(--font-mono); text-transform:uppercase; margin-bottom:4px; }
+  .resumo-item .val{ font-family:var(--font-display); font-size:20px; font-weight:600; }
+  .resumo-item .val.up{ color:var(--mint); }
+  .resumo-item .val.down{ color:var(--red); }
+</style>
+
+<div class="toolbar">
+  <div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Dashboard</h1>
+  <p style="color:var(--text-secondary); font-size:13px; margin:0;">Visão geral da loja.</p></div>
+</div>
+
+<div class="resumo-dia">
+  <h3>📅 Resumo de hoje — <span id="dataHoje"></span></h3>
+  <div class="resumo-grid">
+    <div class="resumo-item"><div class="lbl">Vendido hoje</div><div class="val up" id="rVendidoHoje">—</div></div>
+    <div class="resumo-item"><div class="lbl">Investido hoje (compras+despesas)</div><div class="val down" id="rInvestidoHoje">—</div></div>
+    <div class="resumo-item"><div class="lbl">Lucro do dia</div><div class="val" id="rLucroHoje">—</div></div>
+    <div class="resumo-item"><div class="lbl">Vendas concluídas hoje</div><div class="val" id="rQtdVendasHoje">—</div></div>
+    <div class="resumo-item"><div class="lbl">OS entregues hoje</div><div class="val" id="rOsEntreguesHoje">—</div></div>
+  </div>
+</div>
+
+<div class="kpi-grid" id="kpiGrid">
+  <div class="kpi"><div class="lbl">Vendas (total)</div><div class="val">—</div></div>
+  <div class="kpi"><div class="lbl">Ticket médio</div><div class="val">—</div></div>
+  <div class="kpi"><div class="lbl">Clientes cadastrados</div><div class="val">—</div></div>
+  <div class="kpi"><div class="lbl">Estoque baixo</div><div class="val">—</div></div>
+</div>
+
+<div class="chart-grid">
+  <div class="chart-card"><h4 style="font-family:var(--font-display); font-size:14px; margin:0 0 14px;">Vendas dos últimos 14 dias</h4><canvas id="chartVendas14" height="130"></canvas></div>
+  <div class="chart-card"><h4 style="font-family:var(--font-display); font-size:14px; margin:0 0 14px;">Produtos mais vendidos</h4><ul class="mini-list" id="listaMaisVendidos"><li>Carregando…</li></ul></div>
+</div>
+
+<div class="chart-grid">
+  <div class="chart-card"><h4 style="font-family:var(--font-display); font-size:14px; margin:0 0 14px;">Receitas x Despesas (últimos 6 meses)</h4><canvas id="chartFinanceiro" height="150"></canvas></div>
+  <div class="chart-card"><h4 style="font-family:var(--font-display); font-size:14px; margin:0 0 14px;">Formas de pagamento</h4><canvas id="chartPagamento" height="150"></canvas></div>
+</div>
+
+<div class="chart-card" style="margin-bottom:16px;">
+  <h4 style="font-family:var(--font-display); font-size:14px; margin:0 0 14px;">🏬 Comparação entre lojas</h4>
+  <div id="comparacaoLojas">Carregando…</div>
+</div>
+
+<script>
+(async function(){
+  function moeda(v){ return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
+  function tentarCarregarScript(src, timeoutMs){
+    return new Promise((resolve) => {
+      let resolvido = false;
+      const finalizar = (ok) => { if (!resolvido) { resolvido = true; resolve(ok); } };
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = () => finalizar(true);
+      s.onerror = () => finalizar(false);
+      document.head.appendChild(s);
+      setTimeout(() => finalizar(false), timeoutMs);
+    });
+  }
+
+  async function carregarChartJs(){
+    if (window.Chart) return;
+    const provedores = [
+      'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js',
+      'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js'
+    ];
+    for (const url of provedores) {
+      const ok = await tentarCarregarScript(url, 6000);
+      if (ok && window.Chart) return;
+    }
+    console.error('Não consegui carregar o Chart.js por nenhum dos dois provedores (rede bloqueando ambos?).');
+  }
+
+  document.getElementById('dataHoje').textContent = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long' });
+
+  try {
+    const [vendas, itensVenda, clientes, produtos, financeiro, assistencias] = await Promise.all([
+      dbQuery('VENDAS', { STATUS: 'Concluída' }),
+      dbGetAll('ITENS_VENDA'),
+      dbGetAll('CLIENTES'),
+      dbGetAll('PRODUTOS'),
+      dbGetAll('FINANCEIRO'),
+      dbGetAll('ASSISTENCIAS')
+    ]);
+
+    const hojeStr = new Date().toDateString();
+    const vendasHoje = vendas.filter(v => new Date(v.DATA).toDateString() === hojeStr);
+    const vendidoHoje = vendasHoje.reduce((s,v) => s + Number(v.VALOR_TOTAL||0), 0);
+    const investidoHoje = financeiro.filter(f => f.TIPO === 'Despesa' && f.STATUS === 'Pago' && f.DATA_PAGAMENTO && new Date(f.DATA_PAGAMENTO).toDateString() === hojeStr)
+      .reduce((s,f) => s + Number(f.VALOR||0), 0);
+    const osEntreguesHoje = assistencias.filter(o => o.DATA_ENTREGA_REAL && new Date(o.DATA_ENTREGA_REAL).toDateString() === hojeStr).length;
+
+    document.getElementById('rVendidoHoje').textContent = moeda(vendidoHoje);
+    document.getElementById('rInvestidoHoje').textContent = moeda(investidoHoje);
+    const lucroHojeEl = document.getElementById('rLucroHoje');
+    lucroHojeEl.textContent = moeda(vendidoHoje - investidoHoje);
+    lucroHojeEl.className = 'val ' + (vendidoHoje - investidoHoje >= 0 ? 'up' : 'down');
+    document.getElementById('rQtdVendasHoje').textContent = vendasHoje.length;
+    document.getElementById('rOsEntreguesHoje').textContent = osEntreguesHoje;
+
+    const valorTotal = vendas.reduce((s, v) => s + Number(v.VALOR_TOTAL || 0), 0);
+    const ticketMedio = vendas.length ? valorTotal / vendas.length : 0;
+    const estoqueBaixo = produtos.filter(p => Number(p.ESTOQUE_ATUAL) <= Number(p.ESTOQUE_MINIMO)).length;
+
+    const kpis = document.querySelectorAll('#kpiGrid .kpi .val');
+    kpis[0].textContent = moeda(valorTotal);
+    kpis[1].textContent = moeda(ticketMedio);
+    kpis[2].textContent = clientes.filter(c => c.STATUS !== 'Excluído').length;
+    kpis[3].textContent = estoqueBaixo + ' itens';
+
+    const contagem = {};
+    itensVenda.forEach(item => { contagem[item.PRODUTO_ID] = (contagem[item.PRODUTO_ID] || 0) + Number(item.QUANTIDADE || 0); });
+    const maisVendidos = Object.entries(contagem).sort((a,b) => b[1]-a[1]).slice(0,5)
+      .map(([produtoId, qtd]) => { const produto = produtos.find(p => p.ID === produtoId); return { nome: produto ? produto.NOME : produtoId, qtd }; });
+    setHTML('listaMaisVendidos', maisVendidos.length
+      ? maisVendidos.map(p => `<li><span>${p.nome}</span><span class="qty">${p.qtd}x</span></li>`).join('')
+      : '<li>Nenhuma venda registrada ainda.</li>');
+
+    await carregarChartJs();
+    if (!window.Chart) {
+      const aviso = '<div style="text-align:center; color:var(--amber); font-size:12.5px; padding:20px 0;">⚠️ Gráficos não carregaram (tentei 2 fontes diferentes) — pode ser bloqueador de anúncio ativo.</div>';
+      ['chartVendas14','chartFinanceiro','chartPagamento'].forEach(cid => {
+        const el = document.getElementById(cid);
+        if (el) el.closest('.chart-card').insertAdjacentHTML('beforeend', aviso);
+      });
+      return;
+    }
+
+    // ---------- Gráfico: vendas últimos 14 dias ----------
+    const dias14 = [];
+    for (let i = 13; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate()-i); dias14.push(d); }
+    const valoresPorDia = dias14.map(d => vendas.filter(v => new Date(v.DATA).toDateString() === d.toDateString()).reduce((s,v)=>s+Number(v.VALOR_TOTAL||0),0));
+    new Chart(document.getElementById('chartVendas14').getContext('2d'), {
+      type: 'bar',
+      data: { labels: dias14.map(d => d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})), datasets: [{ data: valoresPorDia, backgroundColor:'rgba(47,225,168,0.55)', borderRadius:5, maxBarThickness:22 }] },
+      options: { plugins:{ legend:{ display:false } }, scales:{ x:{ grid:{ display:false }, ticks:{ color:'#8891A3', font:{ size:9 } } }, y:{ grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#8891A3', font:{ size:10 } } } } }
+    });
+
+    // ---------- Gráfico: receitas x despesas últimos 6 meses ----------
+    const meses = [];
+    for (let i = 5; i >= 0; i--) { const d = new Date(); d.setMonth(d.getMonth()-i); meses.push(d); }
+    const receitasPorMes = meses.map(m => financeiro.filter(f => f.TIPO==='Receita' && f.STATUS==='Pago' && f.DATA_PAGAMENTO && new Date(f.DATA_PAGAMENTO).getMonth()===m.getMonth() && new Date(f.DATA_PAGAMENTO).getFullYear()===m.getFullYear()).reduce((s,f)=>s+Number(f.VALOR||0),0));
+    const despesasPorMes = meses.map(m => financeiro.filter(f => f.TIPO==='Despesa' && f.STATUS==='Pago' && f.DATA_PAGAMENTO && new Date(f.DATA_PAGAMENTO).getMonth()===m.getMonth() && new Date(f.DATA_PAGAMENTO).getFullYear()===m.getFullYear()).reduce((s,f)=>s+Number(f.VALOR||0),0));
+    new Chart(document.getElementById('chartFinanceiro').getContext('2d'), {
+      type: 'bar',
+      data: { labels: meses.map(m => m.toLocaleDateString('pt-BR',{month:'short'})),
+        datasets: [
+          { label:'Receitas', data: receitasPorMes, backgroundColor:'rgba(47,225,168,0.6)', borderRadius:4 },
+          { label:'Despesas', data: despesasPorMes, backgroundColor:'rgba(255,92,92,0.6)', borderRadius:4 }
+        ] },
+      options: { plugins:{ legend:{ labels:{ color:'#8891A3', font:{ size:10.5 } } } }, scales:{ x:{ grid:{ display:false }, ticks:{ color:'#8891A3' } }, y:{ grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#8891A3' } } } }
+    });
+
+    // ---------- Gráfico: formas de pagamento ----------
+    const contagemPagamento = {};
+    vendas.forEach(v => { const f = v.FORMA_PAGAMENTO || 'Não informado'; contagemPagamento[f] = (contagemPagamento[f]||0) + 1; });
+    new Chart(document.getElementById('chartPagamento').getContext('2d'), {
+      type: 'doughnut',
+      data: { labels: Object.keys(contagemPagamento), datasets: [{ data: Object.values(contagemPagamento), backgroundColor:['#2FE1A8','#4C8DFF','#F5A623','#FF5C5C','#8891A3'] }] },
+      options: { plugins:{ legend:{ position:'bottom', labels:{ color:'#8891A3', font:{ size:10.5 } } } } }
+    });
+
+  } catch (e) {
+    mostrarToast('Erro ao carregar dashboard: ' + e.message, 'erro');
+  }
+
+  // ---------- Comparação entre lojas ----------
+  try {
+    const [empresas, produtosTodos, vendasTodas, financeiroTodo] = await Promise.all([
+      dbGetAll('EMPRESAS'), dbGetAll('PRODUTOS'), dbQuery('VENDAS', { STATUS: 'Concluída' }), dbGetAll('FINANCEIRO')
+    ]);
+
+    if (empresas.length < 2) {
+      setHTML('comparacaoLojas', '<p style="color:var(--text-tertiary); font-size:12.5px; margin:0;">Cadastre 2 ou mais lojas em Empresas pra ver a comparação aqui.</p>');
+    } else {
+      const linhasComparacao = empresas.map(e => {
+        const vendasLoja = vendasTodas.filter(v => v.EMPRESA_ID === e.ID);
+        const totalVendido = vendasLoja.reduce((s,v)=>s+Number(v.VALOR_TOTAL||0),0);
+        const despesas = financeiroTodo.filter(f => f.EMPRESA_ID === e.ID && f.TIPO==='Despesa' && f.STATUS==='Pago').reduce((s,f)=>s+Number(f.VALOR||0),0);
+        const produtosLoja = produtosTodos.filter(p => p.EMPRESA_ID === e.ID && p.STATUS !== 'Excluído');
+        const emEstoque = produtosLoja.filter(p => Number(p.ESTOQUE_ATUAL) > 0).length;
+        return { nome: e.NOME, vendas: vendasLoja.length, totalVendido, lucro: totalVendido - despesas, emEstoque };
+      });
+
+      setHTML('comparacaoLojas', `
+        <table class="dt"><thead><tr><th>Loja</th><th>Vendas</th><th>Total vendido</th><th>Lucro (vendas - despesas)</th><th>Itens em estoque</th></tr></thead>
+        <tbody>${linhasComparacao.map(l => `<tr>
+          <td><b>${l.nome}</b></td><td>${l.vendas}</td><td>${moeda(l.totalVendido)}</td>
+          <td style="color:${l.lucro>=0?'var(--mint)':'var(--red)'};">${moeda(l.lucro)}</td>
+          <td>${l.emEstoque}</td></tr>`).join('')}</tbody></table>
+      `);
+    }
+  } catch (e) { mostrarToast('Erro na comparação de lojas: ' + e.message, 'erro'); }
+})();
+</script>

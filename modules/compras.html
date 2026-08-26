@@ -1,0 +1,128 @@
+<style>
+  .modal-overlay{ position:fixed; inset:0; background:rgba(3,5,8,0.6); display:none; align-items:center; justify-content:center; z-index:100; padding:24px; }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:14px; width:100%; max-width:520px; max-height:88vh; overflow-y:auto; }
+  .modal-head{ display:flex; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--hairline); }
+  .modal-body{ padding:20px 22px; }
+  .modal-foot{ display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--hairline); }
+  .ffield{ margin-bottom:14px; }
+  .ffield label{ display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px; }
+  .ffield input, .ffield select{ width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; }
+  .modal-close{ background:none; border:none; color:var(--text-tertiary); font-size:18px; cursor:pointer; }
+  .item-linha{ display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; margin-bottom:8px; align-items:center; }
+</style>
+
+<div class="toolbar">
+  <div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Compras</h1></div>
+  <button class="btn btn-primary" id="btnNovo">+ Nova compra</button>
+</div>
+
+<table class="dt"><thead><tr><th>Data</th><th>Loja</th><th>Fornecedor</th><th>Valor total</th><th>Status</th></tr></thead>
+  <tbody id="linhas"><tr class="empty-row"><td colspan="5">Carregando…</td></tr></tbody>
+</table>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <div class="modal-head"><h3 style="font-family:var(--font-display); margin:0;">Nova compra</h3><button class="modal-close" id="fecharModal">✕</button></div>
+    <div class="modal-body">
+      <div class="ffield"><label>Loja *</label><select id="fLojaCompra"><option value="">Selecione…</option></select></div>
+      <div class="ffield"><label>Fornecedor</label><select id="fFornecedor"><option value="">Selecione…</option></select></div>
+      <div id="itensCompra"></div>
+      <button class="btn" id="btnAddItem" style="margin-top:6px;">+ item</button>
+    </div>
+    <div class="modal-foot"><button class="btn" id="btnCancelar">Cancelar</button><button class="btn btn-primary" id="btnSalvar">Registrar compra</button></div>
+  </div>
+</div>
+
+<script>
+(async function(){
+  let compras = [], fornecedores = [], produtos = [], empresas = [], produtosDaLojaCompra = [];
+
+  function moeda(v){ return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
+  function dataBR(v){ return v ? parseDataLocal(v).toLocaleDateString('pt-BR') : '—'; }
+  function nomeFornecedor(id){ const f = fornecedores.find(x=>x.ID===id); return f?f.NOME:'—'; }
+  function nomeLoja(id){ if (!id) return '—'; const e = empresas.find(x=>x.ID===id); return e?e.NOME:'—'; }
+
+  async function carregar(){
+    try {
+      if (!(await checarPermissao('COMPRAS','VISUALIZAR'))){ setHTML('linhas', '<tr class="empty-row"><td colspan="5">Sem permissão.</td></tr>'); return; }
+      empresas = await dbGetAll('EMPRESAS');
+      fornecedores = await dbGetAll('FORNECEDORES');
+      produtos = await dbGetAll('PRODUTOS');
+      let todasCompras = await dbGetAll('COMPRAS');
+      compras = window.lojaAtivaId ? todasCompras.filter(c => c.EMPRESA_ID === window.lojaAtivaId) : todasCompras;
+      setHTML('linhas', compras.length
+        ? compras.map(c => `<tr><td>${dataBR(c.DATA)}</td><td>${nomeLoja(c.EMPRESA_ID)}</td><td>${nomeFornecedor(c.FORNECEDOR_ID)}</td><td>${moeda(c.VALOR_TOTAL)}</td><td><span class="badge ok">${c.STATUS}</span></td></tr>`).join('')
+        : '<tr class="empty-row"><td colspan="5">Nenhuma compra registrada.</td></tr>');
+      setHTML('fFornecedor', '<option value="">Selecione…</option>' + fornecedores.map(f => `<option value="${f.ID}">${f.NOME}</option>`).join(''));
+
+      const selLoja = document.getElementById('fLojaCompra');
+      if (window.lojaAtivaId) {
+        setHTML('fLojaCompra', empresas.map(e => `<option value="${e.ID}" ${e.ID===window.lojaAtivaId?'selected':''}>${e.NOME}</option>`).join(''));
+        selLoja.disabled = true;
+      } else {
+        setHTML('fLojaCompra', '<option value="">Selecione…</option>' + empresas.map(e => `<option value="${e.ID}">${e.NOME}</option>`).join(''));
+        selLoja.disabled = false;
+      }
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  }
+
+  function atualizarProdutosDaLojaCompra(){
+    const lojaId = document.getElementById('fLojaCompra').value;
+    produtosDaLojaCompra = lojaId ? produtos.filter(p => p.EMPRESA_ID === lojaId) : [];
+  }
+
+  const modal = document.getElementById('modal');
+  function linhaItemHtml(){
+    const opcoes = produtosDaLojaCompra.map(p => `<option value="${p.ID}">${p.NOME}</option>`).join('') || '<option value="">Selecione a loja primeiro</option>';
+    return `<div class="item-linha"><select class="item-produto">${opcoes}</select><input class="item-qtd" type="number" placeholder="Qtd" value="1"><input class="item-preco" type="number" step="0.01" placeholder="Preço unit."><button class="btn" onclick="this.parentElement.remove()">✕</button></div>`;
+  }
+  document.getElementById('btnNovo').addEventListener('click', () => {
+    atualizarProdutosDaLojaCompra();
+    setHTML('itensCompra', linhaItemHtml());
+    modal.classList.add('open');
+  });
+  document.getElementById('fLojaCompra').addEventListener('change', () => {
+    atualizarProdutosDaLojaCompra();
+    setHTML('itensCompra', linhaItemHtml());
+  });
+  document.getElementById('btnAddItem').addEventListener('click', () => {
+    document.getElementById('itensCompra').insertAdjacentHTML('beforeend', linhaItemHtml());
+  });
+  document.getElementById('fecharModal').addEventListener('click', () => modal.classList.remove('open'));
+  document.getElementById('btnCancelar').addEventListener('click', () => modal.classList.remove('open'));
+
+  document.getElementById('btnSalvar').addEventListener('click', async () => {
+    const lojaId = document.getElementById('fLojaCompra').value;
+    if (!lojaId){ mostrarToast('Selecione a loja desta compra.', 'erro'); return; }
+
+    const linhas = [...document.querySelectorAll('#itensCompra .item-linha')].map(l => ({
+      PRODUTO_ID: l.querySelector('.item-produto').value,
+      QUANTIDADE: Number(l.querySelector('.item-qtd').value)||0,
+      PRECO_UNITARIO: Number(l.querySelector('.item-preco').value)||0
+    })).filter(i => i.PRODUTO_ID && i.QUANTIDADE > 0);
+
+    if (!linhas.length){ mostrarToast('Adicione ao menos um item válido.', 'erro'); return; }
+
+    try {
+      if (!(await checarPermissao('COMPRAS','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      const valorTotal = linhas.reduce((s,i) => s + i.QUANTIDADE*i.PRECO_UNITARIO, 0);
+      const compra = await dbInsert('COMPRAS', { EMPRESA_ID: lojaId, FORNECEDOR_ID: document.getElementById('fFornecedor').value, DATA: new Date().toISOString(), VALOR_TOTAL: valorTotal, STATUS: 'Concluída' });
+
+      for (const item of linhas) {
+        await dbInsert('ITENS_COMPRA', Object.assign({ COMPRA_ID: compra.ID }, item));
+        const produto = produtos.find(p => p.ID === item.PRODUTO_ID);
+        const novoEstoque = (Number(produto.ESTOQUE_ATUAL)||0) + item.QUANTIDADE;
+        await dbUpdate('PRODUTOS', produto.ID, { ESTOQUE_ATUAL: novoEstoque });
+        await dbInsert('MOVIMENTOS_ESTOQUE', { EMPRESA_ID: lojaId, PRODUTO_ID: produto.ID, TIPO:'ENTRADA_COMPRA', QUANTIDADE: item.QUANTIDADE, MOTIVO:'Compra '+compra.ID, USUARIO_ID: usuarioAtual.ID, DATA: new Date().toISOString() });
+      }
+      await dbInsert('FINANCEIRO', { EMPRESA_ID: lojaId, TIPO:'Despesa', CATEGORIA:'Compra de mercadoria', DESCRICAO:'Compra '+compra.ID, VALOR: valorTotal, DATA_VENCIMENTO: new Date().toISOString(), DATA_PAGAMENTO: new Date().toISOString(), STATUS:'Pago' });
+
+      mostrarToast('Compra registrada e estoque atualizado.');
+      modal.classList.remove('open'); carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  carregar();
+})();
+</script>

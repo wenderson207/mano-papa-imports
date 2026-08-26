@@ -1,0 +1,140 @@
+<style>
+  .tabs{ display:flex; gap:4px; border-bottom:1px solid var(--hairline); margin-bottom:20px; }
+  .tab{ padding:10px 14px; font-size:12.5px; color:var(--text-secondary); cursor:pointer; border-bottom:2px solid transparent; }
+  .tab.active{ color:var(--mint); border-color:var(--mint); }
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; }
+  .perm-table th, .perm-table td{ text-align:center; }
+  .perm-table td:first-child, .perm-table th:first-child{ text-align:left; }
+</style>
+
+<div class="toolbar"><div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Configurações</h1></div></div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="permissoes">Perfis &amp; permissões</div>
+  <div class="tab" data-tab="horario">Horário de funcionamento</div>
+  <div class="tab" data-tab="empresa">Sobre o Firestore</div>
+</div>
+
+<div id="painelPermissoes" class="tab-panel active">
+  <div class="card">
+    <div style="max-width:280px; margin-bottom:16px;"><label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">Perfil</label>
+      <select id="selPerfil" style="width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px;"></select>
+    </div>
+    <table class="dt perm-table">
+      <thead><tr><th>Módulo</th><th>Ver</th><th>Cadastrar</th><th>Editar</th><th>Excluir</th></tr></thead>
+      <tbody id="permLinhas"><tr class="empty-row"><td colspan="5">Selecione um perfil.</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="painelHorario" class="tab-panel">
+  <div class="card">
+    <p style="color:var(--text-secondary); font-size:13px; margin:0 0 16px;">Define o horário exibido pro cliente e usado como referência pra prazos de entrega.</p>
+    <table class="dt" style="margin-bottom:16px;">
+      <thead><tr><th>Dia</th><th>Status</th><th>Abre</th><th>Fecha</th></tr></thead>
+      <tbody id="linhasHorario"></tbody>
+    </table>
+    <button class="btn btn-primary" id="btnSalvarHorario">Salvar horário</button>
+  </div>
+</div>
+
+<div id="painelEmpresa" class="tab-panel">
+  <div class="card">
+    <p style="color:var(--text-secondary); font-size:13px;">Formas de pagamento, tipos de serviço e geração de PDF/backup dependiam do Apps Script e ainda não foram migrados pra essa versão Firestore. Se quiser, posso construir isso a seguir.</p>
+  </div>
+</div>
+
+<script>
+(async function(){
+  const MODULOS = ['DASHBOARD','EMPRESAS','FUNCIONARIOS','CLIENTES','PRODUTOS','ESTOQUE','COMPRAS','FORNECEDORES','VENDAS','ORCAMENTOS','ASSISTENCIA','GARANTIAS','FINANCEIRO','RELATORIOS','CONFIGURACOES'];
+
+  document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); tab.classList.add('active');
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    document.getElementById('painel' + tab.dataset.tab.charAt(0).toUpperCase() + tab.dataset.tab.slice(1)).classList.add('active');
+  }));
+
+  if (!(await checarPermissao('CONFIGURACOES','VISUALIZAR'))){ document.querySelector('.content')?.appendChild(document.createTextNode('Sem permissão.')); return; }
+
+  const perfis = await dbGetAll('PERFIS');
+  const sel = document.getElementById('selPerfil');
+  sel.innerHTML = perfis.map(p => `<option value="${p.ID}">${p.NOME}</option>`).join('');
+
+  async function carregarPermissoes(perfilId){
+    const tbody = document.getElementById('permLinhas');
+    tbody.innerHTML = MODULOS.map(m => {
+      const idPerm = perfilId + '_' + m;
+      return `<tr data-modulo="${m}"><td><b>${m}</b></td>
+        <td><input type="checkbox" data-acao="VISUALIZAR" data-perm="${idPerm}"></td>
+        <td><input type="checkbox" data-acao="CADASTRAR" data-perm="${idPerm}"></td>
+        <td><input type="checkbox" data-acao="EDITAR" data-perm="${idPerm}"></td>
+        <td><input type="checkbox" data-acao="EXCLUIR" data-perm="${idPerm}"></td></tr>`;
+    }).join('');
+
+    for (const modulo of MODULOS) {
+      const permissao = await dbGetById('PERMISSOES', perfilId + '_' + modulo);
+      if (!permissao) continue;
+      const linha = tbody.querySelector(`tr[data-modulo="${modulo}"]`);
+      linha.querySelectorAll('input[type=checkbox]').forEach(chk => { chk.checked = !!permissao[chk.dataset.acao]; });
+    }
+
+    tbody.querySelectorAll('input[type=checkbox]').forEach(chk => {
+      chk.addEventListener('change', async () => {
+        try {
+          if (!(await checarPermissao('CONFIGURACOES','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); chk.checked = !chk.checked; return; }
+          const idPerm = chk.dataset.perm;
+          const existente = await dbGetById('PERMISSOES', idPerm);
+          const modulo = chk.closest('tr').dataset.modulo;
+          if (existente) await dbUpdate('PERMISSOES', idPerm, { [chk.dataset.acao]: chk.checked });
+          else await dbInsert('PERMISSOES', { ID: idPerm, PERFIL_ID: perfilId, MODULO: modulo, [chk.dataset.acao]: chk.checked });
+          mostrarToast('Permissão atualizada.');
+        } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); chk.checked = !chk.checked; }
+      });
+    });
+  }
+
+  sel.addEventListener('change', () => carregarPermissoes(sel.value));
+  if (perfis.length) carregarPermissoes(perfis[0].ID);
+
+  // ---------- Horário de funcionamento ----------
+  const DIAS_SEMANA = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+
+  async function carregarHorario(){
+    let horario;
+    try { horario = await dbGetById('CONFIG', 'horario_funcionamento'); } catch (e) { horario = null; }
+
+    const tbody = document.getElementById('linhasHorario');
+    tbody.innerHTML = DIAS_SEMANA.map(dia => {
+      const salvo = (horario && horario[dia]) || { aberto: dia !== 'Domingo', abre: '09:00', fecha: '18:00' };
+      return `<tr data-dia="${dia}">
+        <td><b>${dia}</b></td>
+        <td><label style="display:flex; align-items:center; gap:6px; font-size:12px;"><input type="checkbox" class="chk-aberto" ${salvo.aberto?'checked':''}> Aberto</label></td>
+        <td><input type="time" class="inp-abre" value="${salvo.abre}" style="background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:6px 8px; border-radius:6px;"></td>
+        <td><input type="time" class="inp-fecha" value="${salvo.fecha}" style="background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:6px 8px; border-radius:6px;"></td>
+      </tr>`;
+    }).join('');
+  }
+
+  document.getElementById('btnSalvarHorario').addEventListener('click', async () => {
+    try {
+      if (!(await checarPermissao('CONFIGURACOES','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      const dados = { ID: 'horario_funcionamento' };
+      document.querySelectorAll('#linhasHorario tr').forEach(linha => {
+        const dia = linha.dataset.dia;
+        dados[dia] = {
+          aberto: linha.querySelector('.chk-aberto').checked,
+          abre: linha.querySelector('.inp-abre').value,
+          fecha: linha.querySelector('.inp-fecha').value
+        };
+      });
+      const existente = await dbGetById('CONFIG', 'horario_funcionamento');
+      if (existente) await dbUpdate('CONFIG', 'horario_funcionamento', dados);
+      else await dbInsert('CONFIG', dados);
+      mostrarToast('Horário de funcionamento salvo.');
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  carregarHorario();
+})();
+</script>

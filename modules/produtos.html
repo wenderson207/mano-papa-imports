@@ -1,0 +1,275 @@
+<style>
+  .modal-overlay{ position:fixed; inset:0; background:rgba(3,5,8,0.6); display:none; align-items:center; justify-content:center; z-index:100; padding:24px; }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:14px; width:100%; max-width:480px; max-height:88vh; overflow-y:auto; }
+  .modal-head{ display:flex; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--hairline); }
+  .modal-body{ padding:20px 22px; }
+  .modal-foot{ display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--hairline); }
+  .ffield{ margin-bottom:14px; }
+  .ffield label{ display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px; }
+  .ffield input{ width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; }
+  .frow2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .modal-close{ background:none; border:none; color:var(--text-tertiary); font-size:18px; cursor:pointer; }
+  .badge{ display:inline-flex; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600; font-family:var(--font-mono); }
+  .badge.ok{ background:rgba(47,225,168,0.12); color:var(--mint); }
+  .badge.warn{ background:rgba(245,166,35,0.12); color:var(--amber); }
+</style>
+
+<div class="toolbar">
+  <div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Produtos</h1>
+  <p style="color:var(--text-secondary); font-size:13px; margin:0;">Catálogo, preços e estoque.</p></div>
+  <button class="btn btn-primary" id="btnNovo">+ Novo produto</button>
+</div>
+
+<div style="margin-bottom:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+  <input id="busca" placeholder="Buscar por nome, SKU ou código de barras…" style="width:100%; max-width:340px; background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;">
+  <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-secondary); cursor:pointer;">
+    <input type="checkbox" id="chkSoParados"> Só produtos parados (60+ dias sem vender)
+  </label>
+</div>
+
+<table class="dt">
+  <thead><tr><th>Produto</th><th>SKU</th><th>Categoria</th><th>Loja</th><th>Custo</th><th>Venda</th><th>Estoque</th><th></th></tr></thead>
+  <tbody id="linhas"><tr class="empty-row"><td colspan="8">Carregando…</td></tr></tbody>
+</table>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="modalTitulo" style="font-family:var(--font-display); margin:0;">Novo produto</h3><button class="modal-close" id="fecharModal">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="fId">
+      <div class="ffield"><label>Nome *</label><input id="fNome"></div>
+      <div class="frow2">
+        <div class="ffield"><label>SKU</label><input id="fSku"></div>
+        <div class="ffield"><label>Código de barras</label><input id="fBarras"></div>
+      </div>
+      <div class="ffield"><label>Categoria</label><input id="fCategoria" list="listaCategorias" placeholder="Ex.: Acessórios, Cabos, Fones…">
+        <datalist id="listaCategorias"></datalist>
+      </div>
+      <div id="avisoDuplicado" style="display:none; margin-bottom:14px; padding:10px 12px; border-radius:8px; background:rgba(245,166,35,0.1); border:1px solid rgba(245,166,35,0.35); font-size:12.5px;"></div>
+      <div class="frow2">
+        <div class="ffield"><label>Preço de custo (R$)</label><input id="fCusto" type="number" step="0.01"></div>
+        <div class="ffield"><label>Preço de venda (R$)</label><input id="fVenda" type="number" step="0.01"></div>
+      </div>
+      <div class="frow2">
+        <div class="ffield">
+          <label>Estoque atual <span id="labelSomenteLeitura" style="display:none; color:var(--text-tertiary); font-weight:400;">(use "Ajustar" pra mudar)</span></label>
+          <div style="display:flex; gap:8px;">
+            <input id="fEstoque" type="number" style="flex:1;">
+            <button class="btn" type="button" id="btnAjustarNoModal" style="display:none; white-space:nowrap;">🔧 Ajustar</button>
+          </div>
+        </div>
+        <div class="ffield"><label>Estoque mínimo</label><input id="fEstoqueMin" type="number"></div>
+      </div>
+      <div class="ffield"><label>Garantia padrão (dias)</label><input id="fGarantia" type="number" value="90"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="btnCancelar">Cancelar</button>
+      <button class="btn btn-primary" id="btnSalvar">Salvar produto</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(async function(){
+  let produtos = [], empresas = [];
+  function moeda(v){ return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
+  function nomeLoja(id){ if (!id) return '—'; const e = empresas.find(x=>x.ID===id); return e?e.NOME:'—'; }
+
+  function ehEncalhe(p){
+    if (!p.DATA_CRIACAO || Number(p.ESTOQUE_ATUAL) <= 0) return false;
+    const dias = (new Date() - new Date(p.DATA_CRIACAO)) / 86400000;
+    return dias >= 60;
+  }
+
+  function renderLinhas(lista){
+    const tbody = document.getElementById('linhas');
+    const soParados = document.getElementById('chkSoParados').checked;
+    const listaFiltrada = soParados ? lista.filter(ehEncalhe) : lista;
+    if (!listaFiltrada.length){ setHTML('linhas', '<tr class="empty-row"><td colspan="8">Nenhum produto encontrado.</td></tr>'); return; }
+    setHTML('linhas', listaFiltrada.map(p => {
+      const baixo = Number(p.ESTOQUE_ATUAL) <= Number(p.ESTOQUE_MINIMO);
+      const parado = ehEncalhe(p);
+      return `<tr>
+        <td><b>${p.NOME}</b> ${parado?'<span class="badge warn" title="Parado há 60+ dias">🐌 parado</span>':''}</td><td class="mono">${p.SKU||'—'}</td><td>${p.CATEGORIA||'Geral'}</td><td><span class="badge info" style="background:rgba(76,141,255,0.12); color:var(--blue);">${nomeLoja(p.EMPRESA_ID)}</span></td>
+        <td>${moeda(p.PRECO_CUSTO)}</td><td>${moeda(p.PRECO_VENDA)}</td>
+        <td>${baixo ? '<span class="badge warn">'+p.ESTOQUE_ATUAL+' baixo</span>' : '<span class="badge ok">'+p.ESTOQUE_ATUAL+'</span>'}</td>
+        <td style="display:flex; gap:6px;">
+          <button class="btn" style="padding:6px 10px; font-size:11.5px;" onclick="window.__editarProduto('${p.ID}')">Editar</button>
+          <button class="btn" style="padding:6px 10px; font-size:11.5px;" onclick="window.__imprimirEtiqueta('${p.ID}')">🏷️</button>
+          <button class="btn" style="padding:6px 10px; font-size:11.5px; color:var(--red);" onclick="window.__excluirProduto('${p.ID}')">Excluir</button>
+        </td></tr>`;
+    }).join(''));
+  }
+
+  async function carregar(){
+    try {
+      if (!(await checarPermissao('PRODUTOS', 'VISUALIZAR'))) { setHTML('linhas', '<tr class="empty-row"><td colspan="8">Sem permissão.</td></tr>'); return; }
+      empresas = await dbGetAll('EMPRESAS');
+      let todos = (await dbGetAll('PRODUTOS')).filter(p => p.STATUS !== 'Excluído');
+      produtos = window.lojaAtivaId ? todos.filter(p => p.EMPRESA_ID === window.lojaAtivaId) : todos;
+      renderLinhas(produtos);
+
+      const categoriasExistentes = [...new Set(todos.map(p => p.CATEGORIA).filter(Boolean))];
+      setHTML('listaCategorias', categoriasExistentes.map(c => `<option value="${c}">`).join(''));
+    } catch (e) { mostrarToast('Erro ao carregar produtos: ' + e.message, 'erro'); }
+  }
+
+  document.getElementById('busca').addEventListener('input', e => {
+    const t = e.target.value.toLowerCase();
+    renderLinhas(produtos.filter(p => (p.NOME||'').toLowerCase().includes(t) || (p.SKU||'').toLowerCase().includes(t) || (p.CODIGO_BARRAS||'').toLowerCase().includes(t)));
+  });
+  document.getElementById('chkSoParados').addEventListener('change', () => renderLinhas(produtos));
+
+  window.__imprimirEtiqueta = (id) => {
+    const p = produtos.find(x => x.ID === id);
+    if (!p) return;
+    const codigo = p.CODIGO_BARRAS || p.SKU || p.ID;
+
+    const janela = window.open('', '_blank', 'width=420,height=320');
+    janela.document.write(`
+      <html><head><title>Etiqueta - ${p.NOME}</title></head>
+      <body style="font-family:Arial,sans-serif; padding:14px; text-align:center;">
+        <div style="font-size:13px; font-weight:bold; margin-bottom:4px;">${p.NOME}</div>
+        <div style="font-size:18px; font-weight:800; color:#111; margin-bottom:8px;">${moeda(p.PRECO_VENDA)}</div>
+        <svg id="barcode"></svg>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"><\/script>
+        <script>
+          JsBarcode("#barcode", ${JSON.stringify(codigo)}, { format:"CODE128", width:1.6, height:44, fontSize:12, margin:4 });
+          setTimeout(() => window.print(), 300);
+        <\/script>
+      </body></html>
+    `);
+    janela.document.close();
+  };
+
+  const modal = document.getElementById('modal');
+  function abrirModal(p){
+    document.getElementById('modalTitulo').textContent = p ? 'Editar produto' : 'Novo produto';
+    document.getElementById('fId').value = p ? p.ID : '';
+    document.getElementById('fNome').value = p ? p.NOME : '';
+    document.getElementById('fSku').value = p ? p.SKU||'' : '';
+    document.getElementById('fBarras').value = p ? p.CODIGO_BARRAS||'' : '';
+    document.getElementById('fCategoria').value = p ? p.CATEGORIA||'' : '';
+    document.getElementById('fCusto').value = p ? p.PRECO_CUSTO : '';
+    document.getElementById('fVenda').value = p ? p.PRECO_VENDA : '';
+    document.getElementById('fEstoque').value = p ? p.ESTOQUE_ATUAL : 0;
+    document.getElementById('fEstoqueMin').value = p ? p.ESTOQUE_MINIMO : 0;
+    document.getElementById('fGarantia').value = p ? p.GARANTIA_PADRAO_DIAS : 90;
+    document.getElementById('avisoDuplicado').style.display = 'none';
+
+    // Editando: trava o campo de estoque (só muda via "Ajustar", nunca sobrescrevendo).
+    document.getElementById('fEstoque').disabled = !!p;
+    document.getElementById('labelSomenteLeitura').style.display = p ? 'inline' : 'none';
+    document.getElementById('btnAjustarNoModal').style.display = p ? 'inline-flex' : 'none';
+
+    modal.classList.add('open');
+  }
+  document.getElementById('btnNovo').addEventListener('click', () => abrirModal(null));
+  document.getElementById('fecharModal').addEventListener('click', () => modal.classList.remove('open'));
+  document.getElementById('btnCancelar').addEventListener('click', () => modal.classList.remove('open'));
+
+  /**
+   * Verifica em tempo real (enquanto digita nome/SKU/código de barras) se já
+   * existe um produto parecido — evita cadastrar duplicado quando o usuário
+   * só queria repor a quantidade de algo que já existe.
+   */
+  function verificarDuplicado(){
+    const idAtual = document.getElementById('fId').value;
+    if (idAtual) { document.getElementById('avisoDuplicado').style.display = 'none'; return; } // editando, não avisa
+
+    const nome = document.getElementById('fNome').value.trim().toLowerCase();
+    const sku = document.getElementById('fSku').value.trim().toLowerCase();
+    const barras = document.getElementById('fBarras').value.trim().toLowerCase();
+    if (!nome && !sku && !barras) { document.getElementById('avisoDuplicado').style.display = 'none'; return; }
+
+    const parecido = produtos.find(p => {
+      if (barras && (p.CODIGO_BARRAS||'').toLowerCase() === barras) return true;
+      if (sku && (p.SKU||'').toLowerCase() === sku) return true;
+      if (nome.length >= 3 && (p.NOME||'').toLowerCase().includes(nome)) return true;
+      return false;
+    });
+
+    const aviso = document.getElementById('avisoDuplicado');
+    if (parecido) {
+      aviso.style.display = 'block';
+      aviso.innerHTML = `⚠️ Já existe <b>"${parecido.NOME}"</b> cadastrado (estoque atual: ${parecido.ESTOQUE_ATUAL}). Se for o mesmo produto, não crie outro —
+        <button class="btn" style="padding:4px 8px; font-size:11px; margin-left:2px;" id="btnReporEmVezDeCriar" type="button">repor estoque nele</button>`;
+      document.getElementById('btnReporEmVezDeCriar').addEventListener('click', () => {
+        modal.classList.remove('open');
+        window.__ajustarEstoqueRapido(parecido);
+      });
+    } else {
+      aviso.style.display = 'none';
+    }
+  }
+  ['fNome','fSku','fBarras'].forEach(id => document.getElementById(id).addEventListener('input', verificarDuplicado));
+
+  /** Repor estoque rapidamente num produto já existente, sem duplicar cadastro. Sempre busca o valor mais atual do banco antes de somar. */
+  window.__ajustarEstoqueRapido = async (p) => {
+    const quantidade = prompt('Quantas unidades você está repondo de "' + p.NOME + '"?', '1');
+    if (quantidade === null || !Number(quantidade)) return;
+    try {
+      if (!(await checarPermissao('PRODUTOS','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      const atual = await dbGetById('PRODUTOS', p.ID); // valor fresco, direto do banco
+      const novoEstoque = Number(atual.ESTOQUE_ATUAL||0) + Number(quantidade);
+      await dbUpdate('PRODUTOS', p.ID, { ESTOQUE_ATUAL: novoEstoque });
+      await dbInsert('MOVIMENTOS_ESTOQUE', { EMPRESA_ID: p.EMPRESA_ID||'', PRODUTO_ID: p.ID, TIPO:'REPOSICAO', QUANTIDADE: Number(quantidade), MOTIVO:'Reposição de estoque', USUARIO_ID: usuarioAtual.ID, DATA: new Date().toISOString() });
+      mostrarToast('Estoque reposto: ' + p.NOME + ' agora tem ' + novoEstoque + ' unidades.');
+      modal.classList.remove('open');
+      carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  };
+
+  document.getElementById('btnAjustarNoModal').addEventListener('click', () => {
+    const id = document.getElementById('fId').value;
+    const p = produtos.find(x => x.ID === id);
+    if (p) window.__ajustarEstoqueRapido(p);
+  });
+
+  document.getElementById('btnSalvar').addEventListener('click', async () => {
+    const id = document.getElementById('fId').value;
+    const nome = document.getElementById('fNome').value.trim();
+    if (!nome){ mostrarToast('Informe o nome do produto.', 'erro'); return; }
+
+    const dados = {
+      NOME: nome, SKU: document.getElementById('fSku').value.trim(), CODIGO_BARRAS: document.getElementById('fBarras').value.trim(),
+      CATEGORIA: document.getElementById('fCategoria').value.trim() || 'Geral',
+      PRECO_CUSTO: Number(document.getElementById('fCusto').value)||0, PRECO_VENDA: Number(document.getElementById('fVenda').value)||0,
+      ESTOQUE_MINIMO: Number(document.getElementById('fEstoqueMin').value)||0,
+      GARANTIA_PADRAO_DIAS: Number(document.getElementById('fGarantia').value)||90
+    };
+    if (!id) dados.ESTOQUE_ATUAL = Number(document.getElementById('fEstoque').value)||0; // só na criação — editar nunca sobrescreve o estoque
+
+    try {
+      if (id) {
+        if (!(await checarPermissao('PRODUTOS','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+        await dbUpdate('PRODUTOS', id, dados);
+        mostrarToast('Produto atualizado.');
+      } else {
+        if (!(await checarPermissao('PRODUTOS','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+        const empresaId = await obterLojaParaAcao('Para qual loja é este produto?');
+        if (!empresaId) { mostrarToast('Cadastro cancelado — é preciso escolher a loja.', 'erro'); return; }
+        dados.EMPRESA_ID = empresaId;
+        await dbInsert('PRODUTOS', Object.assign({ STATUS:'Ativo', DATA_CRIACAO: new Date().toISOString() }, dados));
+        mostrarToast('Produto cadastrado.');
+      }
+      modal.classList.remove('open');
+      carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  window.__editarProduto = (id) => { const p = produtos.find(x => x.ID === id); if (p) abrirModal(p); };
+  window.__excluirProduto = async (id) => {
+    if (!confirm('Excluir este produto?')) return;
+    try {
+      if (!(await checarPermissao('PRODUTOS','EXCLUIR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      await dbExcluirLogico('PRODUTOS', id);
+      mostrarToast('Produto excluído.');
+      carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  };
+
+  carregar();
+})();
+</script>

@@ -1,0 +1,281 @@
+<style>
+  .modal-overlay{ position:fixed; inset:0; background:rgba(3,5,8,0.6); display:none; align-items:center; justify-content:center; z-index:100; padding:24px; }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:14px; width:100%; max-width:480px; max-height:88vh; overflow-y:auto; }
+  .modal-box.largo{ max-width:680px; }
+  .modal-head{ display:flex; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--hairline); position:sticky; top:0; background:var(--bg-surface); }
+  .modal-body{ padding:20px 22px; }
+  .modal-foot{ display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--hairline); }
+  .ffield{ margin-bottom:14px; }
+  .ffield label{ display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px; }
+  .ffield input{ width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; }
+  .frow2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .modal-close{ background:none; border:none; color:var(--text-tertiary); font-size:18px; cursor:pointer; }
+  .ficha-kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin-bottom:20px; }
+  .ficha-kpi{ background:var(--bg-elevated); border:1px solid var(--hairline); border-radius:10px; padding:12px 14px; }
+  .ficha-kpi .lbl{ font-size:10.5px; color:var(--text-tertiary); font-family:var(--font-mono); text-transform:uppercase; margin-bottom:4px; }
+  .ficha-kpi .val{ font-family:var(--font-display); font-size:16px; font-weight:700; }
+  .ficha-secao-titulo{ font-family:var(--font-display); font-size:13.5px; font-weight:600; margin:20px 0 10px; padding-top:14px; border-top:1px solid var(--hairline); }
+  .ficha-secao-titulo:first-of-type{ border-top:none; padding-top:0; margin-top:0; }
+  .ficha-item{ display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--hairline); font-size:12.5px; gap:10px; }
+  .ficha-item:last-child{ border-bottom:none; }
+  .ficha-vazio{ color:var(--text-tertiary); font-size:12px; padding:6px 0; }
+</style>
+
+<div class="toolbar">
+  <div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Clientes</h1>
+  <p style="color:var(--text-secondary); font-size:13px; margin:0;">Cadastro e busca de clientes.</p></div>
+  <button class="btn btn-primary" id="btnNovo">+ Novo cliente</button>
+</div>
+
+<div style="margin-bottom:14px;">
+  <input id="busca" placeholder="Buscar por nome, CPF, telefone…" style="width:100%; max-width:340px; background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;">
+</div>
+
+<table class="dt">
+  <thead><tr><th>Nome</th><th>CPF</th><th>Telefone</th><th>Valor gasto</th><th></th></tr></thead>
+  <tbody id="linhas"><tr class="empty-row"><td colspan="5">Carregando…</td></tr></tbody>
+</table>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="modalTitulo" style="font-family:var(--font-display); margin:0;">Novo cliente</h3><button class="modal-close" id="fecharModal">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="fId">
+      <div class="ffield"><label>Nome completo *</label><input id="fNome"></div>
+      <div class="frow2">
+        <div class="ffield"><label>CPF</label><input id="fCpf"></div>
+        <div class="ffield"><label>Telefone / WhatsApp</label><input id="fTelefone"></div>
+      </div>
+      <div class="ffield"><label>Email</label><input id="fEmail"></div>
+      <div class="frow2">
+        <div class="ffield">
+          <label>CEP</label>
+          <input id="fCep" placeholder="00000-000" inputmode="numeric" maxlength="9">
+          <span id="statusCep" style="font-size:11px; color:var(--text-tertiary); display:block; margin-top:4px;"></span>
+        </div>
+        <div class="ffield"><label>Número</label><input id="fNumero"></div>
+      </div>
+      <div class="frow2">
+        <div class="ffield"><label>Rua</label><input id="fRua"></div>
+        <div class="ffield"><label>Bairro</label><input id="fBairro"></div>
+      </div>
+      <div class="frow2">
+        <div class="ffield"><label>Cidade</label><input id="fCidade"></div>
+        <div class="ffield"><label>Estado</label><input id="fEstado" maxlength="2"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="btnCancelar">Cancelar</button>
+      <button class="btn btn-primary" id="btnSalvar">Salvar cliente</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalFicha">
+  <div class="modal-box largo">
+    <div class="modal-head"><h3 id="fichaTitulo" style="font-family:var(--font-display); margin:0;">Ficha do cliente</h3><button class="modal-close" id="fecharModalFicha">✕</button></div>
+    <div class="modal-body" id="fichaCorpo">Carregando…</div>
+    <div class="modal-foot"><button class="btn" id="btnFecharFicha">Fechar</button></div>
+  </div>
+</div>
+
+<script>
+(async function(){
+  let clientes = [];
+
+  function moeda(v){ return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
+
+  function renderLinhas(lista){
+    const tbody = document.getElementById('linhas');
+    if (!lista.length){ tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Nenhum cliente encontrado.</td></tr>'; return; }
+    tbody.innerHTML = lista.map(c => `<tr>
+      <td><b>${c.NOME}</b></td><td class="mono">${c.CPF||'—'}</td><td class="mono">${c.TELEFONE||'—'}</td><td>${moeda(c.VALOR_GASTO_TOTAL)}</td>
+      <td style="display:flex; gap:6px;">
+        <button class="btn" style="padding:6px 10px; font-size:11.5px;" onclick="window.__verFicha('${c.ID}')">📋 Ficha</button>
+        <button class="btn" style="padding:6px 10px; font-size:11.5px;" onclick="window.__editarCliente('${c.ID}')">Editar</button>
+        <button class="btn" style="padding:6px 10px; font-size:11.5px; color:var(--red);" onclick="window.__excluirCliente('${c.ID}')">Excluir</button>
+      </td></tr>`).join('');
+  }
+
+  async function carregar(){
+    try {
+      const podeVer = await checarPermissao('CLIENTES', 'VISUALIZAR');
+      if (!podeVer) { setHTML('linhas', '<tr class="empty-row"><td colspan="5">Sem permissão para ver clientes.</td></tr>'); return; }
+      clientes = (await dbGetAll('CLIENTES')).filter(c => c.STATUS !== 'Excluído');
+      renderLinhas(clientes);
+    } catch (e) {
+      mostrarToast('Erro ao carregar clientes: ' + e.message, 'erro');
+    }
+  }
+
+  document.getElementById('busca').addEventListener('input', e => {
+    const t = e.target.value.toLowerCase();
+    renderLinhas(clientes.filter(c => (c.NOME||'').toLowerCase().includes(t) || (c.CPF||'').includes(t) || (c.TELEFONE||'').includes(t)));
+  });
+
+  // ---------- Busca automática de endereço pelo CEP (ViaCEP) ----------
+  const inputCep = document.getElementById('fCep');
+  const statusCep = document.getElementById('statusCep');
+
+  inputCep.addEventListener('input', () => {
+    // Máscara simples: 00000-000, só números
+    let digitos = inputCep.value.replace(/\D/g, '').slice(0, 8);
+    inputCep.value = digitos.length > 5 ? digitos.slice(0,5) + '-' + digitos.slice(5) : digitos;
+    statusCep.textContent = '';
+    if (digitos.length === 8) buscarEnderecoPorCep(digitos);
+  });
+
+  async function buscarEnderecoPorCep(cepLimpo){
+    statusCep.textContent = 'Buscando endereço…';
+    statusCep.style.color = 'var(--text-tertiary)';
+    try {
+      const resp = await fetch('https://viacep.com.br/ws/' + cepLimpo + '/json/');
+      const dados = await resp.json();
+      if (dados.erro) {
+        statusCep.textContent = 'CEP não encontrado — preenche o endereço manualmente.';
+        statusCep.style.color = 'var(--amber)';
+        return;
+      }
+      document.getElementById('fRua').value = dados.logradouro || '';
+      document.getElementById('fBairro').value = dados.bairro || '';
+      document.getElementById('fCidade').value = dados.localidade || '';
+      document.getElementById('fEstado').value = dados.uf || '';
+      statusCep.textContent = '✓ Endereço encontrado — falta só o número.';
+      statusCep.style.color = 'var(--mint)';
+      document.getElementById('fNumero').focus();
+    } catch (e) {
+      statusCep.textContent = 'Não consegui buscar agora (sem internet?) — preenche manualmente.';
+      statusCep.style.color = 'var(--amber)';
+    }
+  }
+
+  const modal = document.getElementById('modal');
+  function abrirModal(c){
+    document.getElementById('modalTitulo').textContent = c ? 'Editar cliente' : 'Novo cliente';
+    document.getElementById('fId').value = c ? c.ID : '';
+    document.getElementById('fNome').value = c ? c.NOME : '';
+    document.getElementById('fCpf').value = c ? c.CPF||'' : '';
+    document.getElementById('fTelefone').value = c ? c.TELEFONE||'' : '';
+    document.getElementById('fEmail').value = c ? c.EMAIL||'' : '';
+    document.getElementById('fRua').value = c ? c.RUA||'' : '';
+    document.getElementById('fNumero').value = c ? c.NUMERO||'' : '';
+    document.getElementById('fBairro').value = c ? c.BAIRRO||'' : '';
+    document.getElementById('fCep').value = c ? c.CEP||'' : '';
+    document.getElementById('fCidade').value = c ? c.CIDADE||'' : '';
+    document.getElementById('fEstado').value = c ? c.ESTADO||'' : '';
+    statusCep.textContent = '';
+    modal.classList.add('open');
+  }
+  document.getElementById('btnNovo').addEventListener('click', () => abrirModal(null));
+  document.getElementById('fecharModal').addEventListener('click', () => modal.classList.remove('open'));
+  document.getElementById('btnCancelar').addEventListener('click', () => modal.classList.remove('open'));
+
+  document.getElementById('btnSalvar').addEventListener('click', async () => {
+    const id = document.getElementById('fId').value;
+    const nome = document.getElementById('fNome').value.trim();
+    if (!nome){ mostrarToast('Informe o nome do cliente.', 'erro'); return; }
+
+    const dados = {
+      NOME: nome, CPF: document.getElementById('fCpf').value.trim(),
+      TELEFONE: document.getElementById('fTelefone').value.trim(), EMAIL: document.getElementById('fEmail').value.trim(),
+      RUA: document.getElementById('fRua').value.trim(), NUMERO: document.getElementById('fNumero').value.trim(),
+      BAIRRO: document.getElementById('fBairro').value.trim(), CEP: document.getElementById('fCep').value.trim(),
+      CIDADE: document.getElementById('fCidade').value.trim(), ESTADO: document.getElementById('fEstado').value.trim()
+    };
+
+    try {
+      if (id) {
+        const podeEditar = await checarPermissao('CLIENTES', 'EDITAR');
+        if (!podeEditar){ mostrarToast('Sem permissão para editar.', 'erro'); return; }
+        await dbUpdate('CLIENTES', id, dados);
+        mostrarToast('Cliente atualizado.');
+      } else {
+        const podeCadastrar = await checarPermissao('CLIENTES', 'CADASTRAR');
+        if (!podeCadastrar){ mostrarToast('Sem permissão para cadastrar.', 'erro'); return; }
+        await dbInsert('CLIENTES', Object.assign({ VALOR_GASTO_TOTAL: 0, STATUS: 'Ativo', DATA_CRIACAO: new Date().toISOString() }, dados));
+        mostrarToast('Cliente cadastrado.');
+      }
+      modal.classList.remove('open');
+      carregar();
+    } catch (e) {
+      mostrarToast('Erro: ' + e.message, 'erro');
+    }
+  });
+
+  window.__editarCliente = (id) => { const c = clientes.find(x => x.ID === id); if (c) abrirModal(c); };
+  window.__excluirCliente = async (id) => {
+    if (!confirm('Excluir este cliente?')) return;
+    try {
+      const podeExcluir = await checarPermissao('CLIENTES', 'EXCLUIR');
+      if (!podeExcluir){ mostrarToast('Sem permissão para excluir.', 'erro'); return; }
+      await dbExcluirLogico('CLIENTES', id);
+      mostrarToast('Cliente excluído.');
+      carregar();
+    } catch (e) {
+      mostrarToast('Erro: ' + e.message, 'erro');
+    }
+  };
+
+  // ---------- Ficha consolidada (compras + assistências + garantias) ----------
+  const modalFicha = document.getElementById('modalFicha');
+  function dataBR(v){ return v ? parseDataLocal(v).toLocaleDateString('pt-BR') : '—'; }
+
+  window.__verFicha = async (id) => {
+    const cliente = clientes.find(x => x.ID === id);
+    if (!cliente) return;
+
+    document.getElementById('fichaTitulo').textContent = 'Ficha — ' + cliente.NOME;
+    setHTML('fichaCorpo', 'Carregando histórico…');
+    modalFicha.classList.add('open');
+
+    try {
+      const [vendas, assistencias, garantias] = await Promise.all([
+        dbQuery('VENDAS', { CLIENTE_ID: id }),
+        dbQuery('ASSISTENCIAS', { CLIENTE_ID: id }),
+        dbQuery('GARANTIAS', { CLIENTE_ID: id })
+      ]);
+
+      const vendasOrdenadas = vendas.filter(v => v.STATUS !== 'Cancelada').sort((a,b) => new Date(b.DATA) - new Date(a.DATA));
+      const assistOrdenadas = assistencias.sort((a,b) => new Date(b.DATA_ABERTURA) - new Date(a.DATA_ABERTURA));
+      const garantiasAtivas = garantias.filter(g => g.STATUS === 'Ativa');
+
+      const html = `
+        <div class="ficha-kpis">
+          <div class="ficha-kpi"><div class="lbl">Total gasto</div><div class="val">${moeda(cliente.VALOR_GASTO_TOTAL)}</div></div>
+          <div class="ficha-kpi"><div class="lbl">Compras</div><div class="val">${vendasOrdenadas.length}</div></div>
+          <div class="ficha-kpi"><div class="lbl">Assistências</div><div class="val">${assistOrdenadas.length}</div></div>
+          <div class="ficha-kpi"><div class="lbl">Garantias ativas</div><div class="val">${garantiasAtivas.length}</div></div>
+        </div>
+
+        <div style="font-size:12.5px; color:var(--text-secondary); line-height:1.8; margin-bottom:16px;">
+          <b>Telefone:</b> ${cliente.TELEFONE||'—'} &nbsp;·&nbsp; <b>Email:</b> ${cliente.EMAIL||'—'}<br>
+          <b>Endereço:</b> ${[cliente.RUA, cliente.NUMERO].filter(Boolean).join(', ')}${cliente.BAIRRO?' - '+cliente.BAIRRO:''}${cliente.CIDADE?', '+cliente.CIDADE:''}${cliente.ESTADO?'/'+cliente.ESTADO:''}
+        </div>
+
+        <div class="ficha-secao-titulo">🛒 Compras</div>
+        ${vendasOrdenadas.length ? vendasOrdenadas.slice(0,10).map(v => `<div class="ficha-item">
+          <span>${dataBR(v.DATA)} · ${v.FORMA_PAGAMENTO||''}</span><b>${moeda(v.VALOR_TOTAL)}</b>
+        </div>`).join('') : '<div class="ficha-vazio">Nenhuma compra ainda.</div>'}
+
+        <div class="ficha-secao-titulo">🔧 Assistência técnica</div>
+        ${assistOrdenadas.length ? assistOrdenadas.slice(0,10).map(o => `<div class="ficha-item">
+          <span>${o.NUMERO_OS} · ${o.MARCA||''} ${o.MODELO||''}</span><span class="badge ${o.STATUS==='Entregue'?'ok':'info'}" style="background:${o.STATUS==='Entregue'?'rgba(47,225,168,0.12)':'rgba(76,141,255,0.12)'}; color:${o.STATUS==='Entregue'?'var(--mint)':'var(--blue)'}; padding:3px 9px; border-radius:20px; font-size:11px; font-family:var(--font-mono);">${o.STATUS}</span>
+        </div>`).join('') : '<div class="ficha-vazio">Nenhuma OS ainda.</div>'}
+
+        <div class="ficha-secao-titulo">✅ Garantias ativas</div>
+        ${garantiasAtivas.length ? garantiasAtivas.map(g => `<div class="ficha-item">
+          <span>${g.NUMERO_GARANTIA} · ${g.PRODUTO_DESCRICAO||''}</span><span style="color:var(--text-tertiary);">${g.PRAZO_DIAS} dias</span>
+        </div>`).join('') : '<div class="ficha-vazio">Nenhuma garantia ativa.</div>'}
+      `;
+      setHTML('fichaCorpo', html);
+    } catch (e) {
+      setHTML('fichaCorpo', '<div class="ficha-vazio">Erro ao carregar histórico: ' + e.message + '</div>');
+    }
+  };
+  document.getElementById('fecharModalFicha').addEventListener('click', () => modalFicha.classList.remove('open'));
+  document.getElementById('btnFecharFicha').addEventListener('click', () => modalFicha.classList.remove('open'));
+
+  carregar();
+})();
+</script>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Mano Papa — Configuração inicial</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  body{ font-family: Inter, sans-serif; background:#0A0D12; color:#EDEFF3; max-width:640px; margin:60px auto; padding:0 20px; }
+  h1{ font-family: 'Space Grotesk', sans-serif; }
+  .field{ margin-bottom:14px; }
+  label{ display:block; font-size:13px; color:#8891A3; margin-bottom:6px; }
+  input{ width:100%; padding:10px 12px; border-radius:8px; border:1px solid #232937; background:#12161F; color:#EDEFF3; font-size:14px; box-sizing:border-box; }
+  button{ padding:12px 20px; border-radius:8px; border:none; background:#2FE1A8; color:#07130F; font-weight:600; cursor:pointer; font-size:14px; }
+  button:disabled{ opacity:.6; }
+  pre{ background:#12161F; border:1px solid #232937; border-radius:8px; padding:16px; font-size:12.5px; white-space:pre-wrap; max-height:400px; overflow-y:auto; }
+</style>
+</head>
+<body>
+  <h1>⚙️ Configuração inicial — Mano Papa</h1>
+  <p style="color:#8891A3;">Rode isto <b>uma única vez</b>, antes do primeiro login. Cria os perfis de acesso padrão, dá permissão total ao Administrador, e cria o seu usuário administrador.</p>
+
+  <div class="field"><label>Seu nome</label><input id="nome" value="Administrador"></div>
+  <div class="field"><label>Seu email</label><input id="email" type="email" placeholder="voce@manopapa.com"></div>
+  <div class="field"><label>Senha (mínimo 6 caracteres)</label><input id="senha" type="password" placeholder="Escolha uma senha forte"></div>
+
+  <button id="btnRodar">Rodar configuração inicial</button>
+
+  <pre id="log" style="margin-top:20px; display:none;"></pre>
+
+  <script src="assets/js/firebase-init.js"></script>
+  <script src="assets/js/db.js"></script>
+  <script>
+    const PERFIS_PADRAO = ['Administrador', 'Gerente', 'Financeiro', 'Vendedor', 'Técnico', 'Estoquista'];
+    const MODULOS_SISTEMA = [
+      'DASHBOARD', 'EMPRESAS', 'FUNCIONARIOS', 'CLIENTES', 'PRODUTOS', 'ESTOQUE',
+      'COMPRAS', 'FORNECEDORES', 'VENDAS', 'ORCAMENTOS', 'ASSISTENCIA', 'GARANTIAS',
+      'FINANCEIRO', 'RELATORIOS', 'CONFIGURACOES'
+    ];
+
+    const logEl = document.getElementById('log');
+    function log(msg){ logEl.style.display = 'block'; logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+
+    document.getElementById('btnRodar').addEventListener('click', async () => {
+      const nome = document.getElementById('nome').value.trim();
+      const email = document.getElementById('email').value.trim().toLowerCase();
+      const senha = document.getElementById('senha').value;
+      const btn = document.getElementById('btnRodar');
+
+      if (!email || senha.length < 6) { alert('Preencha um email válido e uma senha com pelo menos 6 caracteres.'); return; }
+
+      btn.disabled = true;
+      logEl.textContent = '';
+
+      try {
+        log('1) Criando seu login no Firebase Authentication…');
+        const cred = await auth.createUserWithEmailAndPassword(email, senha);
+        const uid = cred.user.uid;
+        log('   ✅ Login criado e autenticado: ' + email);
+
+        log('2) Verificando/criando perfis padrão…');
+        const perfisExistentes = await dbGetAll('PERFIS');
+        let perfilAdmin;
+        if (perfisExistentes.length === 0) {
+          for (const nomePerfil of PERFIS_PADRAO) {
+            const p = await dbInsert('PERFIS', { NOME: nomePerfil, DESCRICAO: 'Perfil padrão: ' + nomePerfil, DATA_CRIACAO: new Date().toISOString() });
+            if (nomePerfil === 'Administrador') perfilAdmin = p;
+          }
+          log('   ✅ ' + PERFIS_PADRAO.length + ' perfis criados.');
+        } else {
+          perfilAdmin = perfisExistentes.find(p => p.NOME === 'Administrador');
+          log('   Perfis já existiam (' + perfisExistentes.length + '). Usando Administrador: ' + perfilAdmin.ID);
+        }
+
+        log('3) Gravando permissão total do Administrador em todos os módulos…');
+        for (const modulo of MODULOS_SISTEMA) {
+          const idPermissao = perfilAdmin.ID + '_' + modulo; // precisa bater com a convenção do firestore.rules
+          await dbInsert('PERMISSOES', {
+            ID: idPermissao, PERFIL_ID: perfilAdmin.ID, MODULO: modulo,
+            VISUALIZAR: true, CADASTRAR: true, EDITAR: true, EXCLUIR: true, EXPORTAR: true, IMPRIMIR: true
+          });
+        }
+        log('   ✅ Permissões gravadas para os ' + MODULOS_SISTEMA.length + ' módulos.');
+
+        log('4) Criando seu cadastro em USUARIOS…');
+        await db.collection('USUARIOS').doc(uid).set({
+          NOME: nome, EMAIL: email, CARGO: 'Administrador', PERFIL_ID: perfilAdmin.ID,
+          STATUS: 'Ativo', DATA_CRIACAO: new Date().toISOString()
+        });
+        log('   ✅ Usuário administrador vinculado.');
+
+        log('5) Marcando o setup como concluído…');
+        await db.collection('CONFIG').doc('setup_concluido').set({ DATA: new Date().toISOString() });
+        log('   ✅ Setup concluído registrado (protege o sistema contra rodar o seed de novo por acidente).');
+
+        await auth.signOut();
+
+        log('');
+        log('🎉 TUDO PRONTO! Pode ir para a tela de login (index.html) e entrar com:');
+        log('   Email: ' + email);
+        log('   Senha: (a que você digitou acima)');
+      } catch (e) {
+        log('');
+        log('❌ ERRO: ' + (e.message || e));
+        if (e.code === 'auth/email-already-in-use') {
+          log('Esse email já tem uma conta no Firebase Authentication. Se for você mesmo tentando de novo, vá direto pro login.');
+        }
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

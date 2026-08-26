@@ -1,0 +1,539 @@
+<style>
+  .rel-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:20px; }
+  .rel-card{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; padding:16px; cursor:pointer; text-align:center; }
+  .rel-card:hover{ border-color:var(--mint); }
+  .rel-card.active{ border-color:var(--mint); background:var(--bg-elevated); }
+  .rel-card h4{ font-family:var(--font-display); font-size:13px; margin:0; }
+  .rel-resumo{ display:flex; gap:20px; margin-bottom:16px; flex-wrap:wrap; }
+  .rel-resumo .item .lbl{ font-size:11px; color:var(--text-tertiary); font-family:var(--font-mono); text-transform:uppercase; }
+  .rel-resumo .item .val{ font-family:var(--font-display); font-size:18px; font-weight:600; }
+  .rel-filtros{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+  .rel-filtros select, .rel-filtros input{ background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:8px 12px; border-radius:8px; font-size:12.5px; }
+  .rel-filtros label{ display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--text-secondary); cursor:pointer; }
+  .rel-filtros .grupo{ display:flex; flex-direction:column; gap:4px; }
+  .rel-filtros .grupo span{ font-size:10.5px; color:var(--text-tertiary); }
+  table.dt th{ cursor:pointer; user-select:none; white-space:nowrap; }
+  table.dt th:hover{ color:var(--text-primary); }
+  table.dt th .seta{ font-size:9px; margin-left:3px; color:var(--mint); }
+  .chart-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+  @media (max-width: 980px){ .chart-grid{ grid-template-columns:1fr; } }
+  .chart-card{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; padding:18px 20px; }
+  .chart-card h4{ font-family:var(--font-display); font-size:14px; margin:0 0 4px; }
+  .chart-sub{ font-size:11px; color:var(--text-tertiary); margin:0 0 12px; }
+</style>
+
+<div class="toolbar"><div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Relatórios</h1>
+<p style="color:var(--text-secondary); font-size:13px; margin:0;">Filtra por período e categoria, clica numa coluna pra ordenar.</p></div></div>
+
+<div class="rel-grid" id="relGrid"></div>
+
+<div id="relResult" style="display:none;">
+  <div class="rel-filtros" id="relFiltros"></div>
+
+  <div class="chart-grid" id="relChartsWrap" style="display:none;">
+    <div class="chart-card">
+      <h4 id="tituloChartCategoria">Por categoria</h4>
+      <p class="chart-sub" id="subChartCategoria"></p>
+      <div id="avisoSemDadosRelCat" style="display:none; color:var(--text-tertiary); font-size:12.5px; padding:30px 0; text-align:center;"></div>
+      <canvas id="chartRelCategoria"></canvas>
+    </div>
+    <div class="chart-card" id="cardChartHora" style="display:none;">
+      <h4>🕐 Por hora do dia</h4>
+      <p class="chart-sub">Em qual horário concentra mais movimento.</p>
+      <div id="avisoSemDadosRelHora" style="display:none; color:var(--text-tertiary); font-size:12.5px; padding:30px 0; text-align:center;"></div>
+      <canvas id="chartRelHora" height="150"></canvas>
+    </div>
+    <div class="chart-card" id="cardChartExtra" style="display:none; grid-column:1 / -1;">
+      <h4 id="tituloChartExtra">—</h4>
+      <p class="chart-sub" id="subChartExtra"></p>
+      <div id="avisoSemDadosRelExtra" style="display:none; color:var(--text-tertiary); font-size:12.5px; padding:30px 0; text-align:center;"></div>
+      <div style="max-height:260px; position:relative;"><canvas id="chartRelExtra"></canvas></div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="rel-resumo" id="relResumo"></div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn" id="btnExportCsv">⬇️ CSV</button>
+      <button class="btn" id="btnExportPdf">⬇️ PDF</button>
+    </div>
+  </div>
+  <table class="dt"><thead id="relThead"></thead><tbody id="relTbody"></tbody></table>
+</div>
+
+<script>
+(async function(){
+  if (!(await checarPermissao('RELATORIOS','VISUALIZAR'))){ setHTML('relGrid', 'Sem permissão.'); return; }
+
+  const [clientes, usuarios, produtosGlobal, empresas, itensVendaGlobal] = await Promise.all([dbGetAll('CLIENTES'), dbGetAll('USUARIOS'), dbGetAll('PRODUTOS'), dbGetAll('EMPRESAS'), dbGetAll('ITENS_VENDA')]);
+  function nomeCliente(id){ const c = clientes.find(x=>x.ID===id); return c?c.NOME:'—'; }
+  function nomeLoja(id){ if (!id) return '—'; const e = empresas.find(x=>x.ID===id); return e?e.NOME:'—'; }
+  function nomeUsuario(id){ const u = usuarios.find(x=>x.ID===id); return u?u.NOME:(id||'—'); }
+  function moeda(v){ return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
+  function dataHoraBR(v){ return v ? new Date(v).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—'; }
+  function dataBR(v){ return v ? parseDataLocal(v).toLocaleDateString('pt-BR') : '—'; }
+
+  function tentarCarregarScript(src, timeoutMs){
+    return new Promise((resolve) => {
+      let resolvido = false;
+      const finalizar = (ok) => { if (!resolvido) { resolvido = true; resolve(ok); } };
+      const s = document.createElement('script');
+      s.src = src; s.onload = () => finalizar(true); s.onerror = () => finalizar(false);
+      document.head.appendChild(s);
+      setTimeout(() => finalizar(false), timeoutMs);
+    });
+  }
+  async function carregarChartJs(){
+    if (window.Chart) return;
+    const provedores = ['https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js', 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js'];
+    for (const url of provedores) { const ok = await tentarCarregarScript(url, 6000); if (ok && window.Chart) return; }
+    console.error('Não consegui carregar o Chart.js.');
+  }
+
+  const RELATORIOS = [
+    { id:'vendas', nome:'Vendas', colecao:'VENDAS',
+      colunas: ['Data/Hora','Cliente','Vendedor','Pagamento','Valor','Status'],
+      linha: v => [dataHoraBR(v.DATA), nomeCliente(v.CLIENTE_ID) || 'Sem cliente', nomeUsuario(v.USUARIO_ID), v.FORMA_PAGAMENTO + (v.PARCELAS>1?' ('+v.PARCELAS+'x)':''), moeda(v.VALOR_TOTAL), v.STATUS],
+      resumo: lista => [ ['Total de vendas', lista.length], ['Valor total', moeda(lista.reduce((s,v)=>s+Number(v.VALOR_TOTAL||0),0))] ],
+      campoData: 'DATA', campoCategoria: v => v.FORMA_PAGAMENTO || 'Sem forma', rotuloCategoria: 'Por forma de pagamento', campoValor: v => Number(v.VALOR_TOTAL)||0, mostrarHora: true
+    },
+    { id:'clientes', nome:'Clientes', colecao:'CLIENTES',
+      colunas: ['Nome','CPF','Telefone','Valor gasto','Última compra'],
+      linha: c => [c.NOME, c.CPF||'—', c.TELEFONE||'—', moeda(c.VALOR_GASTO_TOTAL), dataBR(c.DATA_ULTIMA_COMPRA)],
+      resumo: lista => [ ['Total de clientes', lista.length] ]
+    },
+    { id:'produtos', nome:'Produtos', colecao:'PRODUTOS',
+      colunas: ['Nome','SKU','Categoria','Loja','Custo','Venda','Estoque'],
+      linha: p => [p.NOME, p.SKU||'—', p.CATEGORIA||'Geral', nomeLoja(p.EMPRESA_ID), moeda(p.PRECO_CUSTO), moeda(p.PRECO_VENDA), p.ESTOQUE_ATUAL],
+      resumo: lista => [ ['Total de produtos', lista.length], ['Estoque baixo', lista.filter(p=>Number(p.ESTOQUE_ATUAL)<=Number(p.ESTOQUE_MINIMO)).length], ['Loja no filtro', window.lojaAtivaId ? nomeLoja(window.lojaAtivaId) : 'Todas'] ],
+      filtrosProduto: true,
+      campoCategoria: p => p.CATEGORIA || 'Geral', rotuloCategoria: 'Por categoria (valor de venda em estoque)', campoValor: p => Number(p.ESTOQUE_ATUAL||0)*Number(p.PRECO_VENDA||0)
+    },
+    { id:'garantias', nome:'Garantias', colecao:'GARANTIAS',
+      colunas: ['Número','Produto','Cliente','Emitida em','Prazo','Status'],
+      linha: g => [g.NUMERO_GARANTIA, g.PRODUTO_DESCRICAO, nomeCliente(g.CLIENTE_ID), dataBR(g.DATA_EMISSAO), g.PRAZO_DIAS+' dias', g.STATUS],
+      resumo: lista => [ ['Total emitidas', lista.length] ],
+      campoData: 'DATA_EMISSAO', campoCategoria: g => g.TIPO === 'MANUTENCAO' ? 'Manutenção' : 'Produto usado', rotuloCategoria: 'Por tipo', campoValor: null
+    },
+    { id:'assistencias', nome:'Assistências', colecao:'ASSISTENCIAS',
+      colunas: ['Nº OS','Cliente','Marca/Modelo','Status','Entrega prevista'],
+      linha: o => [o.NUMERO_OS, nomeCliente(o.CLIENTE_ID), (o.MARCA||'')+' '+(o.MODELO||''), o.STATUS, dataBR(o.PRAZO)],
+      resumo: lista => [ ['Total de OS', lista.length], ['Em aberto', lista.filter(o=>o.STATUS!=='Entregue').length] ],
+      campoData: 'DATA_ABERTURA', campoCategoria: o => o.STATUS || 'Sem status', rotuloCategoria: 'Por status', campoValor: null, mostrarHora: true
+    },
+    { id:'financeiro', nome:'Financeiro', colecao:'FINANCEIRO',
+      colunas: ['Descrição','Categoria','Tipo','Valor','Vencimento','Status'],
+      linha: f => [f.DESCRICAO||'—', f.CATEGORIA||'—', f.TIPO, moeda(f.VALOR), dataBR(f.DATA_VENCIMENTO), f.STATUS],
+      resumo: lista => [
+        ['Receitas', moeda(lista.filter(f=>f.TIPO==='Receita' && f.STATUS==='Pago').reduce((s,f)=>s+Number(f.VALOR||0),0))],
+        ['Despesas', moeda(lista.filter(f=>f.TIPO==='Despesa' && f.STATUS==='Pago').reduce((s,f)=>s+Number(f.VALOR||0),0))]
+      ],
+      campoData: v => v.DATA_PAGAMENTO || v.DATA_VENCIMENTO, campoCategoria: f => f.CATEGORIA || 'Sem categoria', rotuloCategoria: 'Por categoria', campoValor: f => Number(f.VALOR)||0, mostrarHora: true
+    },
+    { id:'produtos_por_cliente', nome:'Produtos por Cliente', colecao:'VENDAS', agrupadoPorCliente: true,
+      colunas: ['Cliente','Produto','Quantidade','Valor Unitário','Valor Total'],
+      linha: item => [item.clienteNome, item.produtoNome, item.quantidade, moeda(item.valorUnitMedio), moeda(item.valorTotal)],
+      resumo: lista => [
+        ['Clientes', new Set(lista.map(i=>i.clienteId)).size],
+        ['Produtos diferentes', new Set(lista.map(i=>i.produtoNome)).size],
+        ['Valor total', moeda(lista.reduce((s,i)=>s+i.valorTotal,0))]
+      ],
+      campoData: 'DATA'
+    },
+    { id:'compras', nome:'Compras', colecao:'COMPRAS',
+      colunas: ['Data','Valor total','Status'],
+      linha: c => [dataBR(c.DATA), moeda(c.VALOR_TOTAL), c.STATUS],
+      resumo: lista => [ ['Total de compras', lista.length], ['Valor total', moeda(lista.reduce((s,c)=>s+Number(c.VALOR_TOTAL||0),0))] ],
+      campoData: 'DATA', campoCategoria: c => c.STATUS || 'Sem status', rotuloCategoria: 'Por status', campoValor: c => Number(c.VALOR_TOTAL)||0
+    }
+  ];
+
+  let relAtivo = null, dadosCompletos = [], dadosFiltrados = [];
+  let ordenacao = { coluna: -1, asc: true };
+
+  setHTML('relGrid', RELATORIOS.map(r => `<div class="rel-card" data-id="${r.id}"><h4>${r.nome}</h4></div>`).join(''));
+
+  document.querySelectorAll('.rel-card').forEach(card => card.addEventListener('click', async () => {
+    document.querySelectorAll('.rel-card').forEach(c=>c.classList.remove('active'));
+    card.classList.add('active');
+    relAtivo = RELATORIOS.find(r => r.id === card.dataset.id);
+    ordenacao = { coluna: -1, asc: true };
+    document.getElementById('relResult').style.display = 'block';
+    setHTML('relTbody', '<tr class="empty-row"><td colspan="10">Carregando…</td></tr>');
+    try {
+      let bruto = await dbGetAll(relAtivo.colecao);
+      if (relAtivo.colecao === 'PRODUTOS' || relAtivo.colecao === 'CLIENTES') bruto = bruto.filter(item => item.STATUS !== 'Excluído');
+      if (relAtivo.colecao === 'PRODUTOS' && window.lojaAtivaId) bruto = bruto.filter(p => p.EMPRESA_ID === window.lojaAtivaId);
+      dadosCompletos = bruto;
+      renderFiltros();
+      aplicarFiltros();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  }));
+
+  function valorData(item){
+    if (!relAtivo.campoData) return null;
+    return typeof relAtivo.campoData === 'function' ? relAtivo.campoData(item) : item[relAtivo.campoData];
+  }
+
+  function renderFiltros(){
+    let html = '';
+    if (relAtivo.campoData) {
+      html += `<div class="grupo"><span>De</span><input type="date" id="filtroDeRel"></div>
+                <div class="grupo"><span>Até</span><input type="date" id="filtroAteRel"></div>`;
+    }
+    if (relAtivo.campoCategoria) {
+      const categorias = [...new Set(dadosCompletos.map(relAtivo.campoCategoria))].filter(Boolean);
+      html += `<div class="grupo"><span>${relAtivo.rotuloCategoria||'Categoria'}</span>
+        <select id="filtroCategoriaRelGenerico"><option value="">Todas</option>${categorias.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>`;
+    }
+    if (relAtivo.filtrosProduto) {
+      html += `<label><input type="checkbox" id="filtroEstoqueBaixoRel"> Só estoque baixo</label>
+        <input id="filtroPrecoMinRel" type="number" step="0.01" placeholder="Preço mín. (R$)" style="width:130px;">
+        <input id="filtroPrecoMaxRel" type="number" step="0.01" placeholder="Preço máx. (R$)" style="width:130px;">`;
+    }
+    if (html) html += `<button class="btn" id="btnLimparFiltroRel" style="padding:8px 12px;">Limpar</button>`;
+    setHTML('relFiltros', html);
+
+    ['filtroDeRel','filtroAteRel','filtroCategoriaRelGenerico','filtroEstoqueBaixoRel','filtroPrecoMinRel','filtroPrecoMaxRel'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.addEventListener('input', aplicarFiltros); el.addEventListener('change', aplicarFiltros); }
+    });
+    const btnLimpar = document.getElementById('btnLimparFiltroRel');
+    if (btnLimpar) btnLimpar.addEventListener('click', () => {
+      ['filtroDeRel','filtroAteRel','filtroCategoriaRelGenerico','filtroPrecoMinRel','filtroPrecoMaxRel'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+      const chk = document.getElementById('filtroEstoqueBaixoRel'); if (chk) chk.checked = false;
+      aplicarFiltros();
+    });
+  }
+
+  function aplicarFiltros(){
+    let lista = dadosCompletos.slice();
+
+    if (relAtivo.campoData) {
+      const de = document.getElementById('filtroDeRel')?.value;
+      const ate = document.getElementById('filtroAteRel')?.value;
+      if (de || ate) lista = lista.filter(item => {
+        const v = valorData(item); if (!v) return false;
+        const d = new Date(v);
+        if (de && d < new Date(de+'T00:00:00')) return false;
+        if (ate && d > new Date(ate+'T23:59:59')) return false;
+        return true;
+      });
+    }
+    if (relAtivo.campoCategoria) {
+      const cat = document.getElementById('filtroCategoriaRelGenerico')?.value;
+      if (cat) lista = lista.filter(item => relAtivo.campoCategoria(item) === cat);
+    }
+    if (relAtivo.filtrosProduto) {
+      const soBaixo = document.getElementById('filtroEstoqueBaixoRel')?.checked;
+      const precoMin = Number(document.getElementById('filtroPrecoMinRel')?.value) || null;
+      const precoMax = Number(document.getElementById('filtroPrecoMaxRel')?.value) || null;
+      lista = lista.filter(p => {
+        if (soBaixo && !(Number(p.ESTOQUE_ATUAL) <= Number(p.ESTOQUE_MINIMO))) return false;
+        if (precoMin !== null && Number(p.PRECO_VENDA) < precoMin) return false;
+        if (precoMax !== null && Number(p.PRECO_VENDA) > precoMax) return false;
+        return true;
+      });
+    }
+
+    if (relAtivo.agrupadoPorCliente) lista = agregarPorClienteProduto(lista);
+
+    dadosFiltrados = lista;
+    renderTabela();
+    renderGraficosRelatorio();
+  }
+
+  /** Cruza as vendas filtradas com os itens delas, juntando tudo por (cliente, produto). */
+  function agregarPorClienteProduto(vendasFiltradas){
+    const idsVendas = new Set(vendasFiltradas.map(v => v.ID));
+    const chaveParaGrupo = {}; // "clienteId::produtoNome" -> { ... }
+
+    itensVendaGlobal.filter(i => idsVendas.has(i.VENDA_ID)).forEach(item => {
+      const venda = vendasFiltradas.find(v => v.ID === item.VENDA_ID);
+      const clienteId = venda.CLIENTE_ID || 'sem-cliente';
+      const clienteNome = venda.CLIENTE_ID ? nomeCliente(venda.CLIENTE_ID) : 'Cliente avulso (sem cadastro)';
+      const produto = produtosGlobal.find(p => p.ID === item.PRODUTO_ID);
+      const produtoNome = produto ? produto.NOME : (item.OS_ID ? 'Serviço de assistência técnica' : 'Produto removido');
+
+      const chave = clienteId + '::' + produtoNome;
+      if (!chaveParaGrupo[chave]) chaveParaGrupo[chave] = { clienteId, clienteNome, produtoNome, quantidade: 0, valorTotal: 0 };
+      chaveParaGrupo[chave].quantidade += Number(item.QUANTIDADE) || 0;
+      chaveParaGrupo[chave].valorTotal += (Number(item.QUANTIDADE)||0) * (Number(item.PRECO_UNITARIO)||0);
+    });
+
+    return Object.values(chaveParaGrupo).map(g => Object.assign(g, { valorUnitMedio: g.quantidade ? g.valorTotal / g.quantidade : 0 }));
+  }
+
+  async function renderGraficosRelatorio(){
+    const wrap = document.getElementById('relChartsWrap');
+    if (!relAtivo.campoCategoria) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'grid';
+    await carregarChartJs();
+    if (!window.Chart) { console.error('Chart.js não carregou.'); return; }
+
+    document.getElementById('tituloChartCategoria').textContent = relAtivo.rotuloCategoria || 'Por categoria';
+    document.getElementById('subChartCategoria').textContent = relAtivo.campoValor ? 'Somando o valor de cada grupo.' : 'Contando quantos registros em cada grupo.';
+
+    try {
+      const porCat = {};
+      dadosFiltrados.forEach(item => {
+        const cat = relAtivo.campoCategoria(item) || 'Outros';
+        porCat[cat] = (porCat[cat]||0) + (relAtivo.campoValor ? relAtivo.campoValor(item) : 1);
+      });
+      let entradas = Object.entries(porCat).sort((a,b)=>b[1]-a[1]);
+      const LIMITE = 8;
+      if (entradas.length > LIMITE) {
+        const principais = entradas.slice(0,LIMITE);
+        const outros = entradas.slice(LIMITE).reduce((s,[,v])=>s+v,0);
+        entradas = [...principais, ['Outros ('+(entradas.length-LIMITE)+')', outros]];
+      }
+      const semDados = !entradas.length;
+      document.getElementById('avisoSemDadosRelCat').style.display = semDados ? 'block':'none';
+      document.getElementById('chartRelCategoria').style.display = semDados ? 'none':'block';
+      if (semDados) document.getElementById('avisoSemDadosRelCat').textContent = 'Nenhum registro com os filtros atuais.';
+      document.getElementById('chartRelCategoria').height = Math.min(240, Math.max(140, entradas.length*24));
+
+      const ch = Chart.getChart('chartRelCategoria'); if (ch) ch.destroy();
+      if (!semDados) new Chart(document.getElementById('chartRelCategoria').getContext('2d'), {
+        type:'bar',
+        data:{ labels: entradas.map(([n])=>n), datasets:[{ data: entradas.map(([,v])=>v),
+          backgroundColor: entradas.map((_,i)=>['#2FE1A8','#4C8DFF','#F5A623','#FF5C5C','#9B7EDE','#22c093','#e2401c','#5B6472','#4dd0e1'][i%9]), borderRadius:4 }] },
+        options:{ indexAxis:'y', plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c => relAtivo.campoValor ? moeda(c.parsed.x) : c.parsed.x+' registro(s)' } } },
+          scales:{ x:{ grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#8891A3', callback: v => relAtivo.campoValor ? moeda(v) : v } }, y:{ grid:{display:false}, ticks:{ color:'#8891A3', font:{size:11} } } } }
+      });
+    } catch(e) { console.error('Erro gráfico categoria:', e); }
+
+    const cardHora = document.getElementById('cardChartHora');
+    if (relAtivo.mostrarHora && relAtivo.campoData) {
+      cardHora.style.display = 'block';
+      try {
+        const porHora = Array(24).fill(0);
+        dadosFiltrados.forEach(item => {
+          const v = valorData(item); if (!v) return;
+          const h = new Date(v).getHours();
+          porHora[h] += (relAtivo.campoValor ? relAtivo.campoValor(item) : 1);
+        });
+        const semDados = !dadosFiltrados.length;
+        document.getElementById('avisoSemDadosRelHora').style.display = semDados ? 'block':'none';
+        document.getElementById('chartRelHora').style.display = semDados ? 'none':'block';
+        if (semDados) document.getElementById('avisoSemDadosRelHora').textContent = 'Nenhum registro com os filtros atuais.';
+
+        const ch2 = Chart.getChart('chartRelHora'); if (ch2) ch2.destroy();
+        if (!semDados) new Chart(document.getElementById('chartRelHora').getContext('2d'), {
+          type:'bar',
+          data:{ labels: porHora.map((_,h)=>h+'h'), datasets:[{ data: porHora, backgroundColor:'rgba(76,141,255,0.75)', borderRadius:3 }] },
+          options:{ plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c => relAtivo.campoValor ? moeda(c.parsed.y) : c.parsed.y+' registro(s)' } } },
+            scales:{ x:{ grid:{display:false}, ticks:{ color:'#8891A3', font:{size:10} } }, y:{ grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#8891A3', callback: v => relAtivo.campoValor ? moeda(v) : v } } } }
+        });
+      } catch(e) { console.error('Erro gráfico por hora:', e); }
+    } else {
+      cardHora.style.display = 'none';
+    }
+
+    await renderGraficoExtra();
+  }
+
+  /** Gráfico extra específico: "o que vendi" (Vendas) ou "quais marcas atendo mais" (Assistências). */
+  async function renderGraficoExtra(){
+    const card = document.getElementById('cardChartExtra');
+
+    if (relAtivo.id === 'vendas') {
+      card.style.display = 'block';
+      document.getElementById('tituloChartExtra').textContent = '📦 O que você vendeu';
+      document.getElementById('subChartExtra').textContent = 'Produtos vendidos no período, agrupados por categoria.';
+
+      const idsVendasFiltradas = new Set(dadosFiltrados.map(v => v.ID));
+      const itensRelevantes = itensVendaGlobal.filter(i => idsVendasFiltradas.has(i.VENDA_ID));
+      const porCategoria = {};
+      itensRelevantes.forEach(item => {
+        const produto = produtosGlobal.find(p => p.ID === item.PRODUTO_ID);
+        const cat = produto ? (produto.CATEGORIA || 'Geral') : (item.OS_ID ? 'Serviço (OS)' : 'Produto removido');
+        porCategoria[cat] = (porCategoria[cat]||0) + (Number(item.QUANTIDADE)||0) * (Number(item.PRECO_UNITARIO)||0);
+      });
+      renderBarraHorizontalGenerica(porCategoria, true);
+
+    } else if (relAtivo.id === 'assistencias') {
+      card.style.display = 'block';
+      document.getElementById('tituloChartExtra').textContent = '📱 Aparelhos mais atendidos';
+      document.getElementById('subChartExtra').textContent = 'Quantidade de ordens de serviço por marca do aparelho, no período.';
+
+      const porMarca = {};
+      dadosFiltrados.forEach(o => { const marca = o.MARCA || 'Sem marca'; porMarca[marca] = (porMarca[marca]||0) + 1; });
+      renderBarraHorizontalGenerica(porMarca, false);
+
+    } else {
+      card.style.display = 'none';
+    }
+  }
+
+  /** Desenha uma barra horizontal genérica no #chartRelExtra — reutilizada pelos dois gráficos extras. */
+  function renderBarraHorizontalGenerica(mapa, ehMoeda){
+    let entradas = Object.entries(mapa).sort((a,b)=>b[1]-a[1]);
+    const LIMITE = 8;
+    if (entradas.length > LIMITE) {
+      const principais = entradas.slice(0,LIMITE);
+      const outros = entradas.slice(LIMITE).reduce((s,[,v])=>s+v,0);
+      entradas = [...principais, ['Outros ('+(entradas.length-LIMITE)+')', outros]];
+    }
+    const semDados = !entradas.length;
+    document.getElementById('avisoSemDadosRelExtra').style.display = semDados ? 'block':'none';
+    document.getElementById('chartRelExtra').style.display = semDados ? 'none':'block';
+    if (semDados) document.getElementById('avisoSemDadosRelExtra').textContent = 'Nenhum registro com os filtros atuais.';
+
+    const ch = Chart.getChart('chartRelExtra'); if (ch) ch.destroy();
+    if (!semDados) new Chart(document.getElementById('chartRelExtra').getContext('2d'), {
+      type:'bar',
+      data:{ labels: entradas.map(([n])=>n), datasets:[{ data: entradas.map(([,v])=>v),
+        backgroundColor: entradas.map((_,i)=>['#2FE1A8','#4C8DFF','#F5A623','#FF5C5C','#9B7EDE','#22c093','#e2401c','#5B6472','#4dd0e1'][i%9]), borderRadius:4 }] },
+      options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c => ehMoeda ? moeda(c.parsed.x) : c.parsed.x+' OS' } } },
+        scales:{ x:{ grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#8891A3', callback: v => ehMoeda ? moeda(v) : v } }, y:{ grid:{display:false}, ticks:{ color:'#8891A3', font:{size:11} } } } }
+    });
+  }
+
+  function valorOrdenavel(texto){
+    if (texto == null) return '';
+    const t = String(texto).trim();
+    const comoMoeda = t.replace(/[R$\s.]/g,'').replace(',', '.');
+    if (/^-?\d+(\.\d+)?$/.test(comoMoeda) && /R\$/.test(t)) return parseFloat(comoMoeda);
+    const dataMatch = t.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (dataMatch) return new Date(dataMatch[3], dataMatch[2]-1, dataMatch[1]).getTime();
+    if (/^-?\d+(\.\d+)?$/.test(t)) return parseFloat(t);
+    return t.toLowerCase();
+  }
+
+  function ordenarLinhas(linhas){
+    if (ordenacao.coluna < 0) return linhas;
+    const idx = ordenacao.coluna;
+    return linhas.slice().sort((a,b) => {
+      const va = valorOrdenavel(a[idx]), vb = valorOrdenavel(b[idx]);
+      if (va < vb) return ordenacao.asc ? -1 : 1;
+      if (va > vb) return ordenacao.asc ? 1 : -1;
+      return 0;
+    });
+  }
+
+  function renderTabela(){
+    if (relAtivo.agrupadoPorCliente) { renderTabelaAgrupadaPorCliente(); return; }
+
+    const linhasRenderizadas = dadosFiltrados.map(item => relAtivo.linha(item));
+    const linhasOrdenadas = ordenarLinhas(linhasRenderizadas);
+
+    setHTML('relThead', '<tr>' + relAtivo.colunas.map((c,i) => {
+      const seta = ordenacao.coluna === i ? `<span class="seta">${ordenacao.asc?'▲':'▼'}</span>` : '';
+      return `<th onclick="window.__ordenarRelatorio(${i})">${c}${seta}</th>`;
+    }).join('') + '</tr>');
+
+    setHTML('relTbody', linhasOrdenadas.length
+      ? linhasOrdenadas.map(linha => '<tr>' + linha.map(v => `<td>${v}</td>`).join('') + '</tr>').join('')
+      : `<tr class="empty-row"><td colspan="${relAtivo.colunas.length}">Nenhum registro encontrado.</td></tr>`);
+
+    setHTML('relResumo', relAtivo.resumo(dadosFiltrados).map(([lbl,val]) => `<div class="item"><div class="lbl">${lbl}</div><div class="val">${val}</div></div>`).join(''));
+  }
+
+  /** Visão especial: agrupa as linhas (já vêm no formato cliente+produto) por cliente,
+   * mostrando cada um com a lista de produtos que comprou embaixo do nome dele. */
+  function renderTabelaAgrupadaPorCliente(){
+    setHTML('relThead', '<tr><th>Cliente / Produtos comprados</th><th></th><th>Qtd.</th><th>Val. Unit.</th><th>Total</th></tr>');
+
+    if (!dadosFiltrados.length){
+      setHTML('relTbody', '<tr class="empty-row"><td colspan="5">Nenhuma compra encontrada com os filtros atuais.</td></tr>');
+      setHTML('relResumo', relAtivo.resumo(dadosFiltrados).map(([lbl,val]) => `<div class="item"><div class="lbl">${lbl}</div><div class="val">${val}</div></div>`).join(''));
+      return;
+    }
+
+    const porCliente = {};
+    dadosFiltrados.forEach(item => {
+      if (!porCliente[item.clienteId]) porCliente[item.clienteId] = { nome: item.clienteNome, produtos: [], totalGasto: 0 };
+      porCliente[item.clienteId].produtos.push(item);
+      porCliente[item.clienteId].totalGasto += item.valorTotal;
+    });
+    const clientesOrdenados = Object.values(porCliente).sort((a,b) => b.totalGasto - a.totalGasto);
+
+    setHTML('relTbody', clientesOrdenados.map(c => `
+      <tr style="background:var(--bg-elevated);">
+        <td colspan="4" style="font-weight:700;">👤 ${c.nome}</td>
+        <td style="font-weight:700; color:var(--mint);">${moeda(c.totalGasto)}</td>
+      </tr>
+      ${c.produtos.sort((a,b)=>b.valorTotal-a.valorTotal).map(p => `
+        <tr>
+          <td colspan="2" style="padding-left:32px; color:var(--text-secondary);">${p.produtoNome}</td>
+          <td>${p.quantidade}</td>
+          <td>${moeda(p.valorUnitMedio)}</td>
+          <td>${moeda(p.valorTotal)}</td>
+        </tr>`).join('')}
+    `).join(''));
+
+    setHTML('relResumo', relAtivo.resumo(dadosFiltrados).map(([lbl,val]) => `<div class="item"><div class="lbl">${lbl}</div><div class="val">${val}</div></div>`).join(''));
+  }
+
+  window.__ordenarRelatorio = (indiceColuna) => {
+    if (ordenacao.coluna === indiceColuna) ordenacao.asc = !ordenacao.asc;
+    else ordenacao = { coluna: indiceColuna, asc: true };
+    renderTabela();
+  };
+
+  document.getElementById('btnExportCsv').addEventListener('click', () => {
+    if (!relAtivo || !dadosFiltrados.length){ mostrarToast('Nada pra exportar.', 'erro'); return; }
+    const linhas = [relAtivo.colunas.join(';')].concat(ordenarLinhas(dadosFiltrados.map(item => relAtivo.linha(item))).map(linha => linha.map(v => String(v).replace(/;/g,',')).join(';')));
+    const blob = new Blob(['\uFEFF' + linhas.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = relAtivo.nome + '.csv'; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('btnExportPdf').addEventListener('click', () => {
+    if (!relAtivo || !dadosFiltrados.length){ mostrarToast('Nada pra exportar.', 'erro'); return; }
+    const { jsPDF } = window.jspdf;
+
+    if (relAtivo.agrupadoPorCliente) {
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      doc.setFontSize(14); doc.setFont(undefined,'bold'); doc.text('Produtos comprados por cliente', 15, 18);
+      doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(120);
+      doc.text('Gerado em ' + new Date().toLocaleString('pt-BR'), 15, 24);
+      doc.setTextColor(20);
+
+      const porCliente = {};
+      dadosFiltrados.forEach(item => {
+        if (!porCliente[item.clienteId]) porCliente[item.clienteId] = { nome: item.clienteNome, produtos: [], totalGasto: 0 };
+        porCliente[item.clienteId].produtos.push(item);
+        porCliente[item.clienteId].totalGasto += item.valorTotal;
+      });
+      const clientesOrdenados = Object.values(porCliente).sort((a,b) => b.totalGasto - a.totalGasto);
+
+      let y = 34;
+      clientesOrdenados.forEach(c => {
+        if (y > 275) { doc.addPage(); y = 20; }
+        doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.setTextColor(226,64,28);
+        doc.text(c.nome + ' — ' + moeda(c.totalGasto), 15, y);
+        y += 6;
+        doc.setFontSize(9.5); doc.setFont(undefined,'normal'); doc.setTextColor(20);
+        c.produtos.sort((a,b)=>b.valorTotal-a.valorTotal).forEach(p => {
+          if (y > 280) { doc.addPage(); y = 20; }
+          doc.text('• ' + p.produtoNome + ' (' + moeda(p.valorUnitMedio) + ', ' + p.quantidade + 'x) = ' + moeda(p.valorTotal), 20, y);
+          y += 5.5;
+        });
+        y += 4;
+      });
+
+      doc.save('Produtos_por_Cliente.pdf');
+      return;
+    }
+
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    doc.setFontSize(14); doc.text('Relatório de ' + relAtivo.nome, 14, 15);
+    doc.setFontSize(9);
+    let y = 25;
+    const larguraColuna = 270 / relAtivo.colunas.length;
+    relAtivo.colunas.forEach((c,i) => doc.text(String(c), 14 + i*larguraColuna, y));
+    y += 6;
+    ordenarLinhas(dadosFiltrados.map(item => relAtivo.linha(item))).forEach(linha => {
+      linha.forEach((v,i) => doc.text(String(v).substring(0,22), 14 + i*larguraColuna, y));
+      y += 6;
+      if (y > 195) { doc.addPage(); y = 20; }
+    });
+    doc.save('Relatorio_' + relAtivo.nome + '.pdf');
+  });
+
+  document.querySelector('.rel-card').click();
+})();
+</script>
