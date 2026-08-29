@@ -27,7 +27,7 @@ function mostrarToast(mensagem, tipo){
 }
 
 // ---------- Loja ativa (filtro global) ----------
-window.lojaAtivaId = sessionStorage.getItem('bstyle_loja_ativa') || '';
+window.lojaAtivaId = sessionStorage.getItem('mano_loja_ativa') || '';
 
 async function popularSeletorLoja(){
   const sel = document.getElementById('seletorLojaGlobal');
@@ -41,7 +41,7 @@ async function popularSeletorLoja(){
     window.__seletorLojaWired = true;
     sel.addEventListener('change', () => {
       window.lojaAtivaId = sel.value;
-      sessionStorage.setItem('bstyle_loja_ativa', sel.value);
+      sessionStorage.setItem('mano_loja_ativa', sel.value);
       mostrarToast(sel.value ? 'Mostrando dados de: ' + sel.options[sel.selectedIndex].text : 'Mostrando todas as lojas');
       window.recarregarModuloAtual();
     });
@@ -320,7 +320,7 @@ window.desenharCabecalhoLoja = async function(doc, empresasList){
 
   const xMarca = logoOk ? 48 : 15;
   const larguraDisponivelMarca = 97 - xMarca; // até pouco antes da coluna das lojas (x=100)
-  const nomeMarca = 'BSTYLE - Eletrônicos & Acessórios';
+  const nomeMarca = 'Mano Papa - Imports';
   doc.setFont(undefined, 'bold'); doc.setTextColor(226, 64, 28);
   let tamanhoFonteMarca = 15;
   doc.setFontSize(tamanhoFonteMarca);
@@ -330,7 +330,7 @@ window.desenharCabecalhoLoja = async function(doc, empresasList){
   }
   if (doc.getTextWidth(nomeMarca) > larguraDisponivelMarca) {
     // Mesmo no tamanho mínimo não coube numa linha — quebra em duas, garantido que não invade a coluna das lojas.
-    doc.text('BSTYLE - Eletrônicos', xMarca, 16);
+    doc.text('Mano Papa - Imports', xMarca, 16);
     doc.text('& Acessórios', xMarca, 21);
     doc.setFontSize(8.5); doc.setFont(undefined, 'normal'); doc.setTextColor(90);
     doc.text((lojas[0] && lojas[0].EMAIL) || (lojas[0] && lojas[0].INSTAGRAM) || '', xMarca, 27);
