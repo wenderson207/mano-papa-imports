@@ -8,12 +8,12 @@
  * -----------------------------------------------------------------------
  */
 const firebaseConfig = {
-  apiKey: "AIzaSyCxWovMBgicwnEK2yzyYHm7clDeIO-m4vU",
-  authDomain: "bstyle-ab14a.firebaseapp.com",
-  projectId: "bstyle-ab14a",
-  storageBucket: "bstyle-ab14a.firebasestorage.app",
-  messagingSenderId: "1065822284388",
-  appId: "1:1065822284388:web:1a00706fd06ae4a35ccd71"
+  apiKey: "AIzaSyC4wKYB-5TqWDSP-qjW-3iGiRW9nOHuGP8",
+  authDomain: "mano-papa.firebaseapp.com",
+  projectId: "mano-papa",
+  storageBucket: "mano-papa.firebasestorage.app",
+  messagingSenderId: "254609927869",
+  appId: "1:254609927869:web:8f1f2f1091dd77f7c691d4"
 };
 
 firebase.initializeApp(firebaseConfig);
