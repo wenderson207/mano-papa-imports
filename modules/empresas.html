@@ -34,6 +34,7 @@
         <div class="ffield"><label>WhatsApp</label><input id="fWhatsapp"></div>
       </div>
       <div class="ffield"><label>Email de contato</label><input id="fEmail" placeholder="contato@sualoja.com"></div>
+      <div class="ffield"><label>Instagram (usuário, sem @)</label><input id="fInstagram" placeholder="ex.: Mano.papa"></div>
       <div class="frow2">
         <div class="ffield"><label>Rua</label><input id="fRua"></div>
         <div class="ffield"><label>Número</label><input id="fNumero"></div>
@@ -87,6 +88,7 @@
     document.getElementById('fCnpj').value = e ? e.CNPJ||'' : '';
     document.getElementById('fWhatsapp').value = e ? e.WHATSAPP||'' : '';
     document.getElementById('fEmail').value = e ? e.EMAIL||'' : '';
+    document.getElementById('fInstagram').value = e ? e.INSTAGRAM||'' : '';
     document.getElementById('fRua').value = e ? e.RUA||'' : '';
     document.getElementById('fNumero').value = e ? e.NUMERO||'' : '';
     document.getElementById('fBairro').value = e ? e.BAIRRO||'' : '';
@@ -108,6 +110,7 @@
     const dados = {
       NOME: nome, CNPJ: document.getElementById('fCnpj').value.trim(), WHATSAPP: document.getElementById('fWhatsapp').value.trim(),
       EMAIL: document.getElementById('fEmail').value.trim(),
+      INSTAGRAM: document.getElementById('fInstagram').value.trim().replace(/^@/,''),
       RUA: document.getElementById('fRua').value.trim(), NUMERO: document.getElementById('fNumero').value.trim(),
       BAIRRO: document.getElementById('fBairro').value.trim(), CEP: document.getElementById('fCep').value.trim(),
       CIDADE: document.getElementById('fCidade').value.trim(), ESTADO: document.getElementById('fEstado').value.trim(),
