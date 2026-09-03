@@ -149,7 +149,10 @@
       return `<tr><td><b>${p.NOME}</b></td><td>${p.CATEGORIA||'Geral'}</td><td>${nomeLoja(p.EMPRESA_ID)}</td><td>${p.ESTOQUE_ATUAL}</td><td>${p.ESTOQUE_MINIMO}</td>
         <td>${moeda(valorProduto(p,'PRECO_CUSTO'))}</td>
         <td>${baixo?'<span class="badge warn">Baixo</span>':'<span class="badge ok">OK</span>'}</td>
-        <td><button class="btn" style="padding:6px 10px;font-size:11.5px;" onclick="window.__ajustar('${p.ID}','${p.NOME.replace(/'/g,"\\'")}',${p.ESTOQUE_ATUAL})">Ajustar</button></td></tr>`;
+        <td style="display:flex; gap:6px;">
+          <button class="btn" style="padding:6px 10px;font-size:11.5px;" onclick="window.__ajustar('${p.ID}','${p.NOME.replace(/'/g,"\\'")}',${p.ESTOQUE_ATUAL})">Ajustar</button>
+          <button class="btn" style="padding:6px 10px;font-size:11.5px; color:var(--mint);" onclick="window.__enviarParaListaCompras('${p.ID}')">📝 Lista</button>
+        </td></tr>`;
     }).join(''));
   }
 
@@ -255,6 +258,21 @@
       });
     } catch (e) { console.error('Erro no gráfico de categoria:', e); }
   }
+
+  window.__enviarParaListaCompras = async (produtoId) => {
+    const produto = produtos.find(p => p.ID === produtoId);
+    if (!produto) return;
+    const faltam = Math.max(1, Number(produto.ESTOQUE_MINIMO||0) - Number(produto.ESTOQUE_ATUAL||0));
+    try {
+      if (!(await checarPermissao('ESTOQUE','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      await dbInsert('LISTA_COMPRAS', {
+        DESCRICAO: produto.NOME, QUANTIDADE: faltam, MODELO: produto.CATEGORIA || '', COR: '',
+        OBSERVACAO: 'Adicionado automaticamente do Estoque (estava com ' + produto.ESTOQUE_ATUAL + ', mínimo é ' + produto.ESTOQUE_MINIMO + ')',
+        DATA_ADICIONADO: new Date().toISOString(), USUARIO_ID: usuarioAtual.ID
+      });
+      mostrarToast('"' + produto.NOME + '" adicionado à lista de compras (Pedidos).');
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  };
 
   window.__ajustar = async (id, nome, atualExibido) => {
     const delta = prompt('Ajuste de estoque para "' + nome + '" (atual: ' + atualExibido + ').\nDigite a quantidade (use negativo para reduzir):', '0');
