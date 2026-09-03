@@ -13,7 +13,7 @@ const NOMES_MODULO = {
   DASHBOARD:'Dashboard', AGENDA:'Agenda', CLIENTES:'Clientes', PRODUTOS:'Produtos', FORNECEDORES:'Fornecedores',
   FUNCIONARIOS:'Funcionários', EMPRESAS:'Empresas', VENDAS:'Vendas (PDV)', ORCAMENTOS:'Orçamentos',
   COMPRAS:'Compras', ESTOQUE:'Estoque', ASSISTENCIA:'Assistência técnica', GARANTIAS:'Garantias',
-  FINANCEIRO:'Financeiro', RELATORIOS:'Relatórios', CONFIGURACOES:'Configurações', CELULARES:'Celulares', DIVERGENCIAS_ESTOQUE:'Divergências de Estoque', CONTROLE_PONTO:'Controle de Ponto'
+  FINANCEIRO:'Financeiro', RELATORIOS:'Relatórios', CONFIGURACOES:'Configurações', CELULARES:'Celulares', DIVERGENCIAS_ESTOQUE:'Divergências de Estoque', CONTROLE_PONTO:'Controle de Ponto', PEDIDOS:'Pedidos'
 };
 
 // ---------- Toast global ----------
@@ -27,7 +27,7 @@ function mostrarToast(mensagem, tipo){
 }
 
 // ---------- Loja ativa (filtro global) ----------
-window.lojaAtivaId = sessionStorage.getItem('mano_loja_ativa') || '';
+window.lojaAtivaId = sessionStorage.getItem('mano_papa_loja') || '';
 
 async function popularSeletorLoja(){
   const sel = document.getElementById('seletorLojaGlobal');
@@ -41,7 +41,7 @@ async function popularSeletorLoja(){
     window.__seletorLojaWired = true;
     sel.addEventListener('change', () => {
       window.lojaAtivaId = sel.value;
-      sessionStorage.setItem('mano_loja_ativa', sel.value);
+      sessionStorage.setItem('mano_papa_loja', sel.value);
       mostrarToast(sel.value ? 'Mostrando dados de: ' + sel.options[sel.selectedIndex].text : 'Mostrando todas as lojas');
       window.recarregarModuloAtual();
     });
