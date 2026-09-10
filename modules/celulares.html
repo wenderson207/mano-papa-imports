@@ -49,8 +49,13 @@
 
 <!-- ===================== ABA: ESTOQUE / CADASTRO ===================== -->
 <div id="painelEstoque" class="tab-panel active">
-  <div style="margin-bottom:14px;">
+  <div style="margin-bottom:14px; display:flex; gap:10px; flex-wrap:wrap;">
     <input id="busca" placeholder="Buscar por marca, modelo ou IMEI…" style="width:100%; max-width:340px; background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;">
+    <select id="filtroDisponibilidade" style="background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;">
+      <option value="disponiveis">Só disponíveis</option>
+      <option value="vendidos">Só vendidos</option>
+      <option value="todos">Todos</option>
+    </select>
   </div>
   <table class="dt">
     <thead><tr><th>Marca/Modelo</th><th>Cor/Memória</th><th>Tipo</th><th>IMEI</th><th>Compra</th><th>Venda</th><th>Estoque</th><th></th></tr></thead>
@@ -176,7 +181,7 @@
   function renderLinhas(lista){
     if (!lista.length){ setHTML('linhas', '<tr class="empty-row"><td colspan="8">Nenhum aparelho cadastrado.</td></tr>'); return; }
     setHTML('linhas', lista.map(a => `<tr>
-      <td><b>${a.MARCA} ${a.MODELO}</b><div style="color:var(--text-tertiary); font-size:11px;">${nomeLoja(a.EMPRESA_ID)}</div></td>
+      <td><b>${(a.MARCA||a.MODELO) ? [a.MARCA,a.MODELO].filter(Boolean).join(' ') : (a.NOME||'Sem marca/modelo')}</b><div style="color:var(--text-tertiary); font-size:11px;">${nomeLoja(a.EMPRESA_ID)}</div></td>
       <td>${a.COR||'—'} ${a.MEMORIA?'/ '+a.MEMORIA+'GB':''}</td>
       <td><span class="badge ${a.TIPO_APARELHO==='Novo'?'info':'warn'}">${a.TIPO_APARELHO||'—'}</span></td>
       <td class="mono">${a.IMEI||'—'}</td>
@@ -195,17 +200,24 @@
       clientes = await dbGetAll('CLIENTES');
       let todos = (await dbGetAll('PRODUTOS')).filter(p => p.CATEGORIA === 'Celular' && p.STATUS !== 'Excluído');
       aparelhos = window.lojaAtivaId ? todos.filter(p => p.EMPRESA_ID === window.lojaAtivaId) : todos;
-      renderLinhas(aparelhos);
+      aplicarFiltrosLista();
 
       const cfgFid = await dbGetById('CONFIG', 'desconto_fidelidade');
       if (cfgFid) configFidelidade = cfgFid;
     } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
   }
 
-  document.getElementById('busca').addEventListener('input', e => {
-    const t = e.target.value.toLowerCase();
-    renderLinhas(aparelhos.filter(a => (a.MARCA||'').toLowerCase().includes(t) || (a.MODELO||'').toLowerCase().includes(t) || (a.IMEI||'').includes(t) || (a.CODIGO_BARRAS||'').toLowerCase().includes(t)));
-  });
+  function aplicarFiltrosLista(){
+    const termo = document.getElementById('busca').value.toLowerCase();
+    const disponibilidade = document.getElementById('filtroDisponibilidade').value;
+    let lista = aparelhos;
+    if (disponibilidade === 'disponiveis') lista = lista.filter(a => Number(a.ESTOQUE_ATUAL) > 0);
+    else if (disponibilidade === 'vendidos') lista = lista.filter(a => Number(a.ESTOQUE_ATUAL) <= 0);
+    if (termo) lista = lista.filter(a => (a.MARCA||'').toLowerCase().includes(termo) || (a.MODELO||'').toLowerCase().includes(termo) || (a.IMEI||'').includes(termo) || (a.CODIGO_BARRAS||'').toLowerCase().includes(termo));
+    renderLinhas(lista);
+  }
+  document.getElementById('busca').addEventListener('input', aplicarFiltrosLista);
+  document.getElementById('filtroDisponibilidade').addEventListener('change', aplicarFiltrosLista);
 
   const modal = document.getElementById('modal');
   function abrirModal(a){
@@ -339,7 +351,7 @@
 
   function mostrarResultadosAparelho(lista){
     if (!lista.length){ setHTML('resultadosAparelho', '<div class="opt">Nenhum aparelho disponível encontrado.</div>'); resAparelho.classList.add('open'); return; }
-    setHTML('resultadosAparelho', lista.map(a => `<div class="opt" data-id="${a.ID}"><div>${a.MARCA} ${a.MODELO} ${a.COR?'- '+a.COR:''}</div><div style="color:var(--text-tertiary); font-size:11px;">${moeda(a.PRECO_VENDA)} · IMEI ${a.IMEI||'—'}</div></div>`).join(''));
+    setHTML('resultadosAparelho', lista.map(a => `<div class="opt" data-id="${a.ID}"><div>${(a.MARCA||a.MODELO) ? [a.MARCA,a.MODELO].filter(Boolean).join(' ') : (a.NOME||'Sem marca/modelo')} ${a.COR?'- '+a.COR:''}</div><div style="color:var(--text-tertiary); font-size:11px;">${moeda(a.PRECO_VENDA)} · IMEI ${a.IMEI||'—'}</div></div>`).join(''));
     resAparelho.classList.add('open');
     resAparelho.querySelectorAll('.opt[data-id]').forEach(el => el.addEventListener('click', () => {
       const aparelho = aparelhosDisponiveis().find(a => a.ID === el.getAttribute('data-id'));
