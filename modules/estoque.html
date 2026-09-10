@@ -265,12 +265,21 @@
     const faltam = Math.max(1, Number(produto.ESTOQUE_MINIMO||0) - Number(produto.ESTOQUE_ATUAL||0));
     try {
       if (!(await checarPermissao('ESTOQUE','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+
+      // Usa (ou cria, se ainda não existir) uma lista fixa "Reposição de Estoque",
+      // já que agora existem várias listas separadas — assim não precisa perguntar
+      // toda vez pra qual lista mandar.
+      const NOME_LISTA_PADRAO = 'Reposição de Estoque';
+      const listasExistentes = await dbGetAll('LISTAS_COMPRAS');
+      let lista = listasExistentes.find(l => l.NOME === NOME_LISTA_PADRAO);
+      if (!lista) lista = await dbInsert('LISTAS_COMPRAS', { NOME: NOME_LISTA_PADRAO, DATA_CRIACAO: new Date().toISOString(), USUARIO_ID: usuarioAtual.ID });
+
       await dbInsert('LISTA_COMPRAS', {
-        DESCRICAO: produto.NOME, QUANTIDADE: faltam, MODELO: produto.CATEGORIA || '', COR: '',
+        LISTA_ID: lista.ID, DESCRICAO: produto.NOME, QUANTIDADE: faltam, CATEGORIA: produto.CATEGORIA || '', MODELO: '', COR: '',
         OBSERVACAO: 'Adicionado automaticamente do Estoque (estava com ' + produto.ESTOQUE_ATUAL + ', mínimo é ' + produto.ESTOQUE_MINIMO + ')',
         DATA_ADICIONADO: new Date().toISOString(), USUARIO_ID: usuarioAtual.ID
       });
-      mostrarToast('"' + produto.NOME + '" adicionado à lista de compras (Pedidos).');
+      mostrarToast('"' + produto.NOME + '" adicionado à lista "' + NOME_LISTA_PADRAO + '" (aba Pedidos).');
     } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
   };
 
