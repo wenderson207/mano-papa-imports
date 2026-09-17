@@ -248,7 +248,7 @@
     if (!token || !chatId){ statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Preenche o Token e o Chat ID antes de testar.'; return; }
     statusEl.style.color = 'var(--text-tertiary)'; statusEl.textContent = 'Enviando...';
     try {
-      const resultado = await window.enviarMensagemTelegram(token, chatId, '✅ Teste do BStyle ERP — se você recebeu essa mensagem, o resumo de caixa vai funcionar certinho!');
+      const resultado = await window.enviarMensagemTelegram(token, chatId, '✅ Teste do Mano Papa ERP — se você recebeu essa mensagem, o resumo de caixa vai funcionar certinho!');
       if (resultado.ok) { statusEl.style.color = 'var(--mint)'; statusEl.textContent = '✓ Mensagem de teste enviada — confere no seu Telegram.'; }
       else { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Erro do Telegram: ' + (resultado.description || 'não foi possível enviar. Confere o Token e o Chat ID.'); }
     } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Erro: ' + e.message; }
