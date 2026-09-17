@@ -1,0 +1,113 @@
+<style>
+  .ajuda-busca{ width:100%; max-width:480px; background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:12px 16px; border-radius:10px; font-size:14px; margin-bottom:24px; }
+  .ajuda-categoria{ margin-bottom:28px; }
+  .ajuda-categoria-titulo{ font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--mint); margin-bottom:10px; }
+  .ajuda-item{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:10px; margin-bottom:8px; overflow:hidden; }
+  .ajuda-pergunta{ padding:14px 18px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:13.5px; font-weight:600; }
+  .ajuda-pergunta:hover{ background:var(--bg-elevated); }
+  .ajuda-resposta{ padding:0 18px; max-height:0; overflow:hidden; transition:all 0.2s ease; color:var(--text-secondary); font-size:13px; line-height:1.6; }
+  .ajuda-item.aberto .ajuda-resposta{ padding:0 18px 16px; max-height:400px; }
+  .ajuda-seta{ transition:transform 0.2s ease; color:var(--text-tertiary); flex-shrink:0; margin-left:12px; }
+  .ajuda-item.aberto .ajuda-seta{ transform:rotate(180deg); }
+  .ajuda-suporte-card{ background:linear-gradient(135deg,var(--bg-surface),var(--bg-elevated)); border:1px solid var(--hairline); border-radius:14px; padding:22px 24px; margin-bottom:28px; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; }
+  .ajuda-sem-resultado{ color:var(--text-tertiary); font-size:13px; text-align:center; padding:40px 20px; }
+</style>
+
+<div class="toolbar">
+  <div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Ajuda e Suporte</h1>
+  <p style="color:var(--text-secondary); font-size:13px; margin:0;">Dúvida em alguma aba? Procura aqui antes — se não achar, chama no WhatsApp.</p></div>
+</div>
+
+<div class="ajuda-suporte-card">
+  <div>
+    <div style="font-weight:700; font-size:14.5px; margin-bottom:4px;">Não achou o que precisava?</div>
+    <div style="color:var(--text-secondary); font-size:12.5px;">Manda sua dúvida direto pra gente pelo WhatsApp.</div>
+  </div>
+  <button class="btn btn-primary" id="btnFalarSuporte">💬 Falar com o suporte</button>
+</div>
+
+<input class="ajuda-busca" id="buscaAjuda" placeholder="🔍 Digite sua dúvida… (ex.: como fechar o caixa)">
+
+<div id="listaAjuda"></div>
+
+<script>
+(async function(){
+  const FAQ = [
+    { categoria: 'Vendas e Caixa', perguntas: [
+      { q: 'Como faço uma venda?', r: 'Vai na aba Vendas, busca o produto pelo nome, adiciona ao carrinho, escolhe a forma de pagamento (ou combina mais de uma) e finaliza. Depois de finalizar, dá pra imprimir o comprovante térmico, gerar uma imagem, ou mandar pelo WhatsApp/Telegram.' },
+      { q: 'Como abro e fecho o caixa do dia?', r: 'Na aba "Caixa Diário", informa o valor inicial e clica em "Abrir caixa". No fim do dia, conta o dinheiro de verdade, digita no campo "Valor contado" e clica em "Fechar caixa" — o sistema calcula sozinho se bateu, sobrou ou faltou, e já monta um resumo pra mandar pro WhatsApp/Telegram ou gerar como imagem.' },
+      { q: 'Posso editar uma venda depois de finalizada?', r: 'Sim — no histórico de vendas, use o botão "Editar". Se mudar o valor ou a forma de pagamento, o sistema pede o motivo do ajuste e registra automaticamente na aba Divergências, pra ficar tudo rastreado.' },
+      { q: 'Excluí uma venda errada, e agora?', r: 'Ao excluir, o sistema já devolve o item pro estoque e desfaz o lançamento financeiro sozinho. Se a venda estava vinculada a uma OS de assistência técnica, o pagamento dela na OS também é desfeito automaticamente.' }
+    ]},
+    { categoria: 'Estoque e Produtos', perguntas: [
+      { q: 'Como sei quais produtos estão com estoque baixo?', r: 'Na aba Estoque, os produtos com "Baixo" aparecem destacados. Tem um botão "📝 Lista" em cada um pra já mandar direto pra uma lista de compras (aba Pedidos), com a quantidade sugerida calculada automaticamente.' },
+      { q: 'Como funciona a aba de Pedidos?', r: 'É uma lista de compras — pode criar várias listas separadas (tipo "Pedido Setembro", "Fornecedor X"), adicionar itens aos poucos, e quando for comprar, clica em Imprimir. A lista NÃO apaga sozinha — só é apagada quando você mandar excluir de propósito.' }
+    ]},
+    { categoria: 'Celulares e Telas', perguntas: [
+      { q: 'Como cadastro um celular pra vender?', r: 'Aba Celulares → aba "Estoque de celulares" → preenche marca, modelo, cor, memória, tipo e IMEI. Depois de vendido, ele some da lista de "disponíveis" automaticamente (dá pra ver os vendidos filtrando por "Só vendidos").' },
+      { q: 'Como funciona a compatibilidade de telas?', r: 'Ao cadastrar uma tela (aba Celulares → Telas), tem um campo "Modelos compatíveis" — se aquela mesma tela serve em outros aparelhos, adiciona eles lá. Depois, ao buscar por qualquer um dos modelos compatíveis, o sistema encontra a tela certa.' },
+      { q: 'Cadastrei uma tela errada, como corrijo?', r: 'Na tabela de telas, usa o botão "Editar" da linha certa. Se quiser adicionar uma variação nova (tipo, com aro/sem aro, qualidade diferente), usa "+ Nova Tela" e adiciona quantas variações precisar no mesmo cadastro.' }
+    ]},
+    { categoria: 'Assistência Técnica', perguntas: [
+      { q: 'Como acompanho o conserto de um aparelho?', r: 'Cada OS aberta gera um link de acompanhamento — o cliente pode ver o status sem precisar ligar. Dentro da OS, dá pra registrar senha do aparelho, checklist de entrada, peças usadas, e pagamento (inclusive parcial).' },
+      { q: 'O aparelho não teve conserto possível, e agora?', r: 'Muda o status da OS pra "Com Defeito - Devolução" — o cartão fica vermelho no quadro, avisando que é uma devolução sem reparo, e pede pra descrever o motivo.' },
+      { q: 'Errei alguma informação numa OS já criada, como corrijo?', r: 'Abre a OS e usa o ✏️ Editar. Toda alteração feita (inclusive troca de senha do aparelho) fica registrada no histórico daquela OS, com data e quem alterou.' }
+    ]},
+    { categoria: 'Funcionários e Permissões', perguntas: [
+      { q: 'Como controlo o que cada funcionário pode acessar?', r: 'Na aba Funcionários, ao cadastrar ou editar alguém, tem uma lista de todas as abas do sistema — marca só as que aquele funcionário precisa usar. O acesso é por pessoa, não por cargo.' },
+      { q: 'Cadastrei um funcionário e ele não vê nenhuma aba, por quê?', r: 'Por padrão, um funcionário novo começa sem nenhuma aba marcada — precisa editar o cadastro dele e marcar manualmente o que ele pode acessar (exceto se o perfil dele for Administrador, que sempre tem acesso total).' }
+    ]},
+    { categoria: 'Financeiro e Relatórios', perguntas: [
+      { q: 'Como vejo quanto cada loja vendeu separadamente?', r: 'No Dashboard, Financeiro e Relatórios, tem um filtro de loja no topo — escolhendo uma loja específica, todos os números da tela passam a mostrar só daquela loja.' },
+      { q: 'Como recebo o resumo do caixa automaticamente?', r: 'Configura o Telegram em Configurações → Telegram (Resumo de Caixa) — depois disso, toda vez que fechar o caixa, o resumo é enviado sozinho pro seu Telegram, sem precisar copiar nada.' }
+    ]}
+  ];
+
+  function renderAjuda(termoBusca){
+    const termo = (termoBusca||'').toLowerCase().trim();
+    const categoriasFiltradas = FAQ.map(cat => ({
+      categoria: cat.categoria,
+      perguntas: cat.perguntas.filter(p => !termo || p.q.toLowerCase().includes(termo) || p.r.toLowerCase().includes(termo))
+    })).filter(cat => cat.perguntas.length > 0);
+
+    if (!categoriasFiltradas.length) {
+      setHTML('listaAjuda', '<div class="ajuda-sem-resultado">Nenhuma pergunta encontrada com esse termo — tenta outra palavra, ou chama no suporte.</div>');
+      return;
+    }
+
+    setHTML('listaAjuda', categoriasFiltradas.map((cat, ci) => `
+      <div class="ajuda-categoria">
+        <div class="ajuda-categoria-titulo">${cat.categoria}</div>
+        ${cat.perguntas.map((p, pi) => `
+          <div class="ajuda-item" id="ajudaItem-${ci}-${pi}">
+            <div class="ajuda-pergunta" onclick="window.__toggleAjuda(${ci},${pi})">
+              <span>${p.q}</span>
+              <span class="ajuda-seta">▾</span>
+            </div>
+            <div class="ajuda-resposta">${p.r}</div>
+          </div>
+        `).join('')}
+      </div>
+    `).join(''));
+  }
+
+  window.__toggleAjuda = (ci, pi) => {
+    document.getElementById('ajudaItem-' + ci + '-' + pi).classList.toggle('aberto');
+  };
+
+  document.getElementById('buscaAjuda').addEventListener('input', (e) => renderAjuda(e.target.value));
+
+  document.getElementById('btnFalarSuporte').addEventListener('click', async () => {
+    let numero = '';
+    try {
+      const cfg = await dbGetById('CONFIG', 'suporte_whatsapp');
+      numero = cfg ? cfg.NUMERO : '';
+    } catch (e) { numero = ''; }
+    const texto = encodeURIComponent('Oi! Preciso de ajuda com o sistema BSTYLE ERP.');
+    if (numero) window.open('https://wa.me/' + numero.replace(/\D/g,'') + '?text=' + texto, '_blank');
+    else window.open('https://wa.me/?text=' + texto, '_blank');
+  });
+
+  renderAjuda('');
+})();
+</script>
