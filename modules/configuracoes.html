@@ -13,6 +13,8 @@
 <div class="tabs">
   <div class="tab active" data-tab="permissoes">Perfis &amp; permissões</div>
   <div class="tab" data-tab="horario">Horário de funcionamento</div>
+  <div class="tab" data-tab="fidelidade">Fidelidade</div>
+  <div class="tab" data-tab="telegram">Telegram (Resumo de Caixa)</div>
   <div class="tab" data-tab="empresa">Sobre o Firestore</div>
 </div>
 
@@ -36,6 +38,51 @@
       <tbody id="linhasHorario"></tbody>
     </table>
     <button class="btn btn-primary" id="btnSalvarHorario">Salvar horário</button>
+  </div>
+</div>
+
+<div id="painelFidelidade" class="tab-panel">
+  <div class="card">
+    <p style="color:var(--text-secondary); font-size:13px; margin:0 0 16px;">Quando o total já gasto por um cliente atingir o valor mínimo abaixo, o PDV avisa o vendedor e sugere o desconto automaticamente.</p>
+    <div class="ffield" style="max-width:280px;">
+      <label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">Ativar desconto por fidelidade</label>
+      <select id="fidAtivo" style="width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px;">
+        <option value="true">Ativado</option><option value="false">Desativado</option>
+      </select>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; max-width:480px; margin-top:14px;">
+      <div class="ffield"><label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">Valor mínimo em compras (R$)</label>
+        <input id="fidValorMinimo" type="number" step="0.01" style="width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px;"></div>
+      <div class="ffield"><label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">Desconto (%)</label>
+        <input id="fidPercentual" type="number" step="0.1" style="width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px;"></div>
+    </div>
+    <button class="btn btn-primary" id="btnSalvarFidelidade" style="margin-top:16px;">Salvar</button>
+  </div>
+</div>
+
+<div id="painelTelegram" class="tab-panel">
+  <div class="card">
+    <p style="color:var(--text-secondary); font-size:13px; margin:0 0 6px;">Configure uma vez e, toda vez que fechar o caixa (a qualquer hora), o resumo do dia é mandado sozinho pro seu Telegram — sem precisar copiar nada.</p>
+    <details style="margin-bottom:18px; font-size:12.5px; color:var(--text-secondary);">
+      <summary style="cursor:pointer; color:var(--mint); font-weight:600;">Como pegar o Token e o Chat ID (passo a passo)</summary>
+      <ol style="margin:10px 0 0; padding-left:18px; line-height:1.8;">
+        <li>No Telegram, procura por <b>@BotFather</b> e manda <code>/newbot</code> — segue as perguntas dele (nome e um usuário terminando em "bot")</li>
+        <li>No final, ele te dá um <b>Token</b> tipo <code>123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ</code> — copia e cola no campo abaixo</li>
+        <li>Procura por <b>@userinfobot</b>, manda qualquer mensagem, e ele te devolve seu <b>Chat ID</b> (um número, tipo <code>987654321</code>) — copia e cola no campo abaixo</li>
+        <li>Importante: manda uma mensagem qualquer pro seu bot novo primeiro (procura ele pelo usuário que você escolheu) — sem isso, o Telegram não deixa ele te mandar mensagem ainda</li>
+      </ol>
+    </details>
+    <div class="frow2" style="max-width:600px;">
+      <div class="ffield"><label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">Token do Bot</label>
+        <input id="tgToken" placeholder="123456789:ABCdef..." style="width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px;"></div>
+      <div class="ffield"><label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">Chat ID</label>
+        <input id="tgChatId" placeholder="987654321" style="width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px;"></div>
+    </div>
+    <div style="display:flex; gap:10px; margin-top:16px;">
+      <button class="btn btn-primary" id="btnSalvarTelegram">Salvar</button>
+      <button class="btn" id="btnTestarTelegram">Enviar mensagem de teste</button>
+    </div>
+    <p id="statusTelegram" style="font-size:12px; margin-top:10px;"></p>
   </div>
 </div>
 
@@ -136,5 +183,68 @@
   });
 
   carregarHorario();
+
+  // ---------- Fidelidade ----------
+  async function carregarFidelidade(){
+    let cfg;
+    try { cfg = await dbGetById('CONFIG', 'desconto_fidelidade'); } catch (e) { cfg = null; }
+    cfg = cfg || { ATIVO: false, VALOR_MINIMO: 500, PERCENTUAL_DESCONTO: 5 };
+    document.getElementById('fidAtivo').value = String(!!cfg.ATIVO);
+    document.getElementById('fidValorMinimo').value = cfg.VALOR_MINIMO || 500;
+    document.getElementById('fidPercentual').value = cfg.PERCENTUAL_DESCONTO || 5;
+  }
+
+  document.getElementById('btnSalvarFidelidade').addEventListener('click', async () => {
+    try {
+      if (!(await checarPermissao('CONFIGURACOES','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      const dados = {
+        ID: 'desconto_fidelidade',
+        ATIVO: document.getElementById('fidAtivo').value === 'true',
+        VALOR_MINIMO: Number(document.getElementById('fidValorMinimo').value) || 0,
+        PERCENTUAL_DESCONTO: Number(document.getElementById('fidPercentual').value) || 0
+      };
+      const existente = await dbGetById('CONFIG', 'desconto_fidelidade');
+      if (existente) await dbUpdate('CONFIG', 'desconto_fidelidade', dados);
+      else await dbInsert('CONFIG', dados);
+      mostrarToast('Configuração de fidelidade salva.');
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  carregarFidelidade();
+
+  // ---------- Telegram (Resumo de Caixa) ----------
+  async function carregarTelegram(){
+    let cfg;
+    try { cfg = await dbGetById('CONFIG', 'telegram_resumo_caixa'); } catch (e) { cfg = null; }
+    document.getElementById('tgToken').value = cfg ? cfg.BOT_TOKEN||'' : '';
+    document.getElementById('tgChatId').value = cfg ? cfg.CHAT_ID||'' : '';
+  }
+
+  document.getElementById('btnSalvarTelegram').addEventListener('click', async () => {
+    try {
+      if (!(await checarPermissao('CONFIGURACOES','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      const dados = { ID:'telegram_resumo_caixa', BOT_TOKEN: document.getElementById('tgToken').value.trim(), CHAT_ID: document.getElementById('tgChatId').value.trim() };
+      const existente = await dbGetById('CONFIG', 'telegram_resumo_caixa');
+      if (existente) await dbUpdate('CONFIG', 'telegram_resumo_caixa', dados);
+      else await dbInsert('CONFIG', dados);
+      mostrarToast('Telegram configurado.');
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  document.getElementById('btnTestarTelegram').addEventListener('click', async () => {
+    const token = document.getElementById('tgToken').value.trim();
+    const chatId = document.getElementById('tgChatId').value.trim();
+    const statusEl = document.getElementById('statusTelegram');
+    if (!token || !chatId){ statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Preenche o Token e o Chat ID antes de testar.'; return; }
+    statusEl.style.color = 'var(--text-tertiary)'; statusEl.textContent = 'Enviando...';
+    try {
+      const resultado = await window.enviarMensagemTelegram(token, chatId, '✅ Teste do Mano Papa — se você recebeu essa mensagem, o resumo de caixa vai funcionar certinho!');
+      if (resultado.ok) { statusEl.style.color = 'var(--mint)'; statusEl.textContent = '✓ Mensagem de teste enviada — confere no seu Telegram.'; }
+      else { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Erro do Telegram: ' + (resultado.description || 'não foi possível enviar. Confere o Token e o Chat ID.'); }
+    } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Erro: ' + e.message; }
+  });
+
+  carregarTelegram();
+
 })();
 </script>
