@@ -8,6 +8,9 @@
   .ffield{ margin-bottom:14px; }
   .ffield label{ display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px; }
   .ffield input, .ffield select{ width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; }
+  .badge{ display:inline-flex; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600; font-family:var(--font-mono); }
+  .badge.ok{ background:rgba(47,225,168,0.12); color:var(--mint); }
+  .badge.warn{ background:rgba(245,166,35,0.12); color:var(--amber); }
   .frow2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .modal-close{ background:none; border:none; color:var(--text-tertiary); font-size:18px; cursor:pointer; }
   .tabs{ display:flex; gap:4px; border-bottom:1px solid var(--hairline); margin-bottom:20px; flex-wrap:wrap; }
@@ -33,7 +36,7 @@
   <div class="tab" data-tab="pagar">Contas a pagar</div>
   <div class="tab" data-tab="receber">Contas a receber</div>
   <div class="tab" data-tab="historico">Histórico completo</div>
-  <div class="tab" data-tab="caixa">Caixa diário</div>
+  <div class="tab" data-tab="caixa">Caixa</div>
 </div>
 
 <div id="painelDashboard">
@@ -41,6 +44,7 @@
     <div><label>De</label><input type="date" id="filtroDe"></div>
     <div><label>Até</label><input type="date" id="filtroAte"></div>
     <div><label>Categoria</label><select id="filtroCategoriaFin"><option value="">Todas</option></select></div>
+    <div><label>Loja</label><select id="filtroLojaFin"><option value="">Todas as lojas</option></select></div>
     <div><label>&nbsp;</label><button class="btn" id="btnLimparFiltroFin" style="padding:8px 12px;">Limpar filtros</button></div>
   </div>
 
@@ -82,16 +86,28 @@
 
 <div id="painelHistorico" style="display:none;">
   <p style="color:var(--text-secondary); font-size:13px; margin:0 0 14px;">Todos os lançamentos (pagos e pendentes). Use pra limpar lançamento de teste que ficou perdido.</p>
-  <table class="dt"><thead><tr><th>Descrição</th><th>Categoria</th><th>Tipo</th><th>Valor</th><th>Status</th><th></th></tr></thead>
-    <tbody id="linhasHistorico"><tr class="empty-row"><td colspan="6">Carregando…</td></tr></tbody>
+  <table class="dt"><thead><tr><th>Descrição</th><th>Categoria</th><th>Loja</th><th>Tipo</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+    <tbody id="linhasHistorico"><tr class="empty-row"><td colspan="7">Carregando…</td></tr></tbody>
   </table>
 </div>
 
 <div id="painelCaixa" style="display:none;">
-  <div class="card" style="background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; padding:20px 22px;">
-    <p style="color:var(--text-secondary); font-size:13px; margin:0 0 16px;">Confere se o dinheiro que devia ter no caixa bate com o que tem de verdade, no fim do dia.</p>
-    <div id="caixaConteudo">Carregando…</div>
+  <p style="color:var(--text-secondary); font-size:13px; margin:0 0 14px;">Abertura e fechamento do caixa, dia a dia — pra conferir se costuma bater, sobrar ou faltar.</p>
+  <div style="margin-bottom:14px; display:flex; gap:10px; flex-wrap:wrap;">
+    <select id="filtroLojaCaixaFin" style="background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;"><option value="">Todas as lojas</option></select>
+    <input type="date" id="filtroDeCaixaFin" style="background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;">
+    <input type="date" id="filtroAteCaixaFin" style="background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;">
+    <button class="btn" id="btnLimparFiltroCaixaFin" style="padding:8px 12px;">Limpar</button>
   </div>
+  <div class="kpi-grid" style="margin-bottom:20px;">
+    <div class="kpi"><div class="lbl">Dias registrados</div><div class="val" id="kpiDiasCaixaFin">—</div></div>
+    <div class="kpi"><div class="lbl">Sobras acumuladas</div><div class="val" id="kpiSobrasCaixaFin">—</div></div>
+    <div class="kpi"><div class="lbl">Faltas acumuladas</div><div class="val" id="kpiFaltasCaixaFin">—</div></div>
+  </div>
+  <table class="dt">
+    <thead><tr><th>Data</th><th>Loja</th><th>Abertura</th><th>Esperado</th><th>Contado</th><th>Diferença</th><th>Status</th></tr></thead>
+    <tbody id="linhasCaixaFin"><tr class="empty-row"><td colspan="7">Carregando…</td></tr></tbody>
+  </table>
 </div>
 
 <div class="modal-overlay" id="modal">
@@ -99,6 +115,7 @@
     <div class="modal-head"><h3 style="font-family:var(--font-display); margin:0;">Novo lançamento</h3><button class="modal-close" id="fecharModal">✕</button></div>
     <div class="modal-body">
       <div class="ffield"><label>Tipo</label><select id="fTipo"><option value="Receita">Receita</option><option value="Despesa">Despesa</option></select></div>
+      <div class="ffield"><label>Loja</label><select id="fEmpresaLancamento"><option value="">Compartilhado (não é de uma loja específica)</option></select></div>
       <div class="frow2">
         <div class="ffield"><label>Categoria</label><input id="fCategoria"></div>
         <div class="ffield"><label>Valor (R$) *</label><input id="fValor" type="number" step="0.01"></div>
@@ -112,9 +129,10 @@
 
 <script>
 (async function(){
-  let todos = [], abaAtual = 'dashboard';
+  let todos = [], empresas = [], abaAtual = 'dashboard';
   function moeda(v){ return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
   function dataBR(v){ return v ? parseDataLocal(v).toLocaleDateString('pt-BR') : '—'; }
+  function nomeLoja(id){ if (!id) return 'Compartilhado'; const e = empresas.find(x=>x.ID===id); return e?e.NOME:'—'; }
 
   function tentarCarregarScript(src, timeoutMs){
     return new Promise((resolve) => {
@@ -137,9 +155,15 @@
     try {
       if (!(await checarPermissao('FINANCEIRO','VISUALIZAR'))){ setHTML('linhas', '<tr class="empty-row"><td colspan="6">Sem permissão.</td></tr>'); return; }
       todos = await dbGetAll('FINANCEIRO');
+      empresas = await dbGetAll('EMPRESAS');
 
       const categorias = [...new Set(todos.map(l => l.CATEGORIA).filter(Boolean))];
       setHTML('filtroCategoriaFin', '<option value="">Todas</option>' + categorias.map(c=>`<option value="${c}">${c}</option>`).join(''));
+
+      const opcoesLoja = empresas.map(e => `<option value="${e.ID}">${e.NOME}</option>`).join('');
+      setHTML('filtroLojaFin', '<option value="">Todas as lojas</option>' + opcoesLoja);
+      setHTML('fEmpresaLancamento', '<option value="">Compartilhado (não é de uma loja específica)</option>' + opcoesLoja);
+      if (window.lojaAtivaId) document.getElementById('fEmpresaLancamento').value = window.lojaAtivaId;
 
       renderTudo();
     } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
@@ -149,6 +173,7 @@
     const de = document.getElementById('filtroDe').value;
     const ate = document.getElementById('filtroAte').value;
     const categoria = document.getElementById('filtroCategoriaFin').value;
+    const loja = document.getElementById('filtroLojaFin').value;
     return todos.filter(l => {
       if (l.STATUS !== 'Pago') return false;
       const dataRef = l.DATA_PAGAMENTO || l.DATA_VENCIMENTO;
@@ -157,20 +182,20 @@
       if (de && d < new Date(de + 'T00:00:00')) return false;
       if (ate && d > new Date(ate + 'T23:59:59')) return false;
       if (categoria && l.CATEGORIA !== categoria) return false;
+      if (loja && l.EMPRESA_ID !== loja) return false;
       return true;
     });
   }
 
   function renderTudo(){
     if (abaAtual === 'dashboard') { renderDashboard(); }
-    else if (abaAtual === 'caixa') { /* carregado à parte */ }
     else if (abaAtual === 'historico') { renderHistoricoCompleto(); }
     else { renderLista(); }
   }
 
-  ['filtroDe','filtroAte','filtroCategoriaFin'].forEach(id => document.getElementById(id).addEventListener('change', renderDashboard));
+  ['filtroDe','filtroAte','filtroCategoriaFin','filtroLojaFin'].forEach(id => document.getElementById(id).addEventListener('change', renderDashboard));
   document.getElementById('btnLimparFiltroFin').addEventListener('click', () => {
-    document.getElementById('filtroDe').value = ''; document.getElementById('filtroAte').value = ''; document.getElementById('filtroCategoriaFin').value = '';
+    document.getElementById('filtroDe').value = ''; document.getElementById('filtroAte').value = ''; document.getElementById('filtroCategoriaFin').value = ''; document.getElementById('filtroLojaFin').value = '';
     renderDashboard();
   });
 
@@ -286,17 +311,16 @@
     document.getElementById('painelContas').style.display = abaAtual==='pagar'||abaAtual==='receber' ? 'block' : 'none';
     document.getElementById('painelHistorico').style.display = abaAtual === 'historico' ? 'block' : 'none';
     document.getElementById('painelCaixa').style.display = abaAtual === 'caixa' ? 'block' : 'none';
-    if (abaAtual === 'caixa') carregarCaixa();
-    else renderTudo();
+    if (abaAtual === 'caixa') carregarCaixaFin(); else renderTudo();
   }));
 
   function renderHistoricoCompleto(){
     const ordenado = todos.slice().sort((a,b) => new Date(b.DATA_PAGAMENTO||b.DATA_VENCIMENTO||0) - new Date(a.DATA_PAGAMENTO||a.DATA_VENCIMENTO||0));
     setHTML('linhasHistorico', ordenado.length ? ordenado.map(l => `<tr>
-      <td>${l.DESCRICAO||'—'}</td><td>${l.CATEGORIA||'—'}</td><td>${l.TIPO}</td><td>${moeda(l.VALOR)}</td>
+      <td>${l.DESCRICAO||'—'}</td><td>${l.CATEGORIA||'—'}</td><td>${nomeLoja(l.EMPRESA_ID)}</td><td>${l.TIPO}</td><td>${moeda(l.VALOR)}</td>
       <td><span class="badge ${l.STATUS==='Pago'?'ok':'warn'}">${l.STATUS}</span></td>
       <td><button class="btn" style="padding:6px 10px; font-size:11.5px; color:var(--red);" onclick="window.__excluirLancamento('${l.ID}')">Excluir</button></td></tr>`).join('')
-      : '<tr class="empty-row"><td colspan="6">Nenhum lançamento ainda.</td></tr>');
+      : '<tr class="empty-row"><td colspan="7">Nenhum lançamento ainda.</td></tr>');
   }
 
   window.__excluirLancamento = async (id) => {
@@ -308,69 +332,6 @@
       carregar();
     } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
   };
-
-  // ---------- Caixa diário ----------
-  function chaveDoDiaCaixa(lojaId){ return (lojaId||'sem-loja') + '_' + new Date().toISOString().substring(0,10); }
-
-  async function carregarCaixa(){
-    const el = document.getElementById('caixaConteudo');
-    try {
-      if (!(await checarPermissao('FINANCEIRO','VISUALIZAR'))){ el.textContent = 'Sem permissão.'; return; }
-      const lojaId = window.lojaAtivaId || await obterLojaParaAcao('Caixa de qual loja você quer conferir?');
-      if (!lojaId) { el.textContent = 'Escolha uma loja pra ver o caixa.'; return; }
-      const idDia = chaveDoDiaCaixa(lojaId);
-      const caixaHoje = await dbGetById('CAIXA', idDia);
-
-      if (!caixaHoje || caixaHoje.STATUS === 'Fechado') {
-        el.innerHTML = `
-          <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">${caixaHoje ? 'Caixa de hoje já foi fechado. Você pode abrir de novo se precisar lançar algo a mais.' : 'Caixa de hoje ainda não foi aberto.'}</p>
-          <div class="frow2" style="max-width:400px;">
-            <div class="ffield"><label>Valor inicial em caixa (R$)</label><input id="valorAbertura" type="number" step="0.01" value="0"></div>
-          </div>
-          <button class="btn btn-primary" id="btnAbrirCaixa">Abrir caixa</button>`;
-        document.getElementById('btnAbrirCaixa').addEventListener('click', async () => {
-          try {
-            if (!(await checarPermissao('FINANCEIRO','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
-            await dbInsert('CAIXA', { ID: idDia, EMPRESA_ID: lojaId, DATA: new Date().toISOString(), VALOR_ABERTURA: Number(document.getElementById('valorAbertura').value)||0, STATUS: 'Aberto', USUARIO_ABERTURA: usuarioAtual.ID });
-            mostrarToast('Caixa aberto.'); carregarCaixa();
-          } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
-        });
-        return;
-      }
-
-      const vendasHoje = (await dbGetAll('VENDAS')).filter(v => v.EMPRESA_ID === lojaId && v.STATUS === 'Concluída' && new Date(v.DATA).toDateString() === new Date().toDateString());
-      const dinheiroHoje = vendasHoje.filter(v => v.FORMA_PAGAMENTO === 'Dinheiro').reduce((s,v)=>s+Number(v.VALOR_TOTAL||0),0);
-      const outrasFormasHoje = vendasHoje.filter(v => v.FORMA_PAGAMENTO !== 'Dinheiro').reduce((s,v)=>s+Number(v.VALOR_TOTAL||0),0);
-      const esperadoEmCaixa = Number(caixaHoje.VALOR_ABERTURA||0) + dinheiroHoje;
-
-      el.innerHTML = `
-        <div class="kpi-grid" style="margin-bottom:18px;">
-          <div class="kpi"><div class="lbl">Abertura</div><div class="val">${moeda(caixaHoje.VALOR_ABERTURA)}</div></div>
-          <div class="kpi"><div class="lbl">Vendas em dinheiro hoje</div><div class="val">${moeda(dinheiroHoje)}</div></div>
-          <div class="kpi"><div class="lbl">Outras formas (cartão/PIX)</div><div class="val">${moeda(outrasFormasHoje)}</div></div>
-          <div class="kpi"><div class="lbl">Esperado em caixa (dinheiro)</div><div class="val">${moeda(esperadoEmCaixa)}</div></div>
-        </div>
-        <div class="frow2" style="max-width:400px;">
-          <div class="ffield"><label>Valor contado ao fechar (R$)</label><input id="valorContado" type="number" step="0.01"></div>
-        </div>
-        <button class="btn btn-primary" id="btnFecharCaixa">Fechar caixa</button>
-        <div id="resultadoFechamento" style="margin-top:14px; font-size:13px;"></div>`;
-
-      document.getElementById('btnFecharCaixa').addEventListener('click', async () => {
-        const contado = Number(document.getElementById('valorContado').value);
-        if (isNaN(contado)){ mostrarToast('Informe o valor contado.', 'erro'); return; }
-        const diferenca = contado - esperadoEmCaixa;
-        try {
-          if (!(await checarPermissao('FINANCEIRO','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
-          await dbUpdate('CAIXA', idDia, { STATUS: 'Fechado', VALOR_ESPERADO: esperadoEmCaixa, VALOR_CONTADO: contado, DIFERENCA: diferenca, USUARIO_FECHAMENTO: usuarioAtual.ID, DATA_FECHAMENTO: new Date().toISOString() });
-          const cor = diferenca === 0 ? 'var(--mint)' : (diferenca > 0 ? 'var(--blue)' : 'var(--red)');
-          const texto = diferenca === 0 ? 'Caixa bateu certinho! 🎉' : (diferenca > 0 ? `Sobrou ${moeda(diferenca)} no caixa.` : `Faltou ${moeda(Math.abs(diferenca))} no caixa.`);
-          setHTML('resultadoFechamento', `<b style="color:${cor};">${texto}</b>`);
-          mostrarToast('Caixa fechado.');
-        } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
-      });
-    } catch (e) { el.textContent = 'Erro: ' + e.message; }
-  }
 
   window.__baixar = async (id) => {
     try {
@@ -392,11 +353,59 @@
       if (!(await checarPermissao('FINANCEIRO','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
       await dbInsert('FINANCEIRO', {
         TIPO: document.getElementById('fTipo').value, CATEGORIA: document.getElementById('fCategoria').value.trim(),
+        EMPRESA_ID: document.getElementById('fEmpresaLancamento').value,
         VALOR: valor, DESCRICAO: document.getElementById('fDescricao').value.trim(),
         DATA_VENCIMENTO: document.getElementById('fVencimento').value, STATUS: 'Pendente'
       });
       mostrarToast('Lançamento registrado.'); modal.classList.remove('open'); carregar();
     } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  // ---------- Caixa (abertura/fechamento por dia) ----------
+  let caixaFinCompleto = [];
+  async function carregarCaixaFin(){
+    try {
+      if (!(await checarPermissao('CAIXA','VISUALIZAR'))){ setHTML('linhasCaixaFin', '<tr class="empty-row"><td colspan="7">Sem permissão.</td></tr>'); return; }
+      caixaFinCompleto = (await dbGetAll('CAIXA')).sort((a,b) => new Date(b.DATA) - new Date(a.DATA));
+      const opcoesLoja = empresas.map(e => `<option value="${e.ID}">${e.NOME}</option>`).join('');
+      setHTML('filtroLojaCaixaFin', '<option value="">Todas as lojas</option>' + opcoesLoja);
+      renderCaixaFin();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  }
+
+  function renderCaixaFin(){
+    const loja = document.getElementById('filtroLojaCaixaFin').value;
+    const de = document.getElementById('filtroDeCaixaFin').value;
+    const ate = document.getElementById('filtroAteCaixaFin').value;
+    let lista = caixaFinCompleto;
+    if (loja) lista = lista.filter(c => c.EMPRESA_ID === loja);
+    if (de) lista = lista.filter(c => new Date(c.DATA) >= new Date(de + 'T00:00:00'));
+    if (ate) lista = lista.filter(c => new Date(c.DATA) <= new Date(ate + 'T23:59:59'));
+
+    document.getElementById('kpiDiasCaixaFin').textContent = lista.length;
+    document.getElementById('kpiSobrasCaixaFin').textContent = moeda(lista.filter(c=>Number(c.DIFERENCA)>0).reduce((s,c)=>s+Number(c.DIFERENCA),0));
+    document.getElementById('kpiFaltasCaixaFin').textContent = moeda(Math.abs(lista.filter(c=>Number(c.DIFERENCA)<0).reduce((s,c)=>s+Number(c.DIFERENCA),0)));
+
+    setHTML('linhasCaixaFin', lista.length ? lista.map(c => {
+      const dif = Number(c.DIFERENCA);
+      const corDif = c.STATUS !== 'Fechado' ? 'var(--text-tertiary)' : (dif === 0 ? 'var(--mint)' : dif > 0 ? 'var(--blue)' : 'var(--red)');
+      const textoDif = c.STATUS !== 'Fechado' ? '—' : (dif === 0 ? 'Bateu' : dif > 0 ? '+' + moeda(dif) : '-' + moeda(Math.abs(dif)));
+      return `<tr>
+        <td>${new Date(c.DATA).toLocaleDateString('pt-BR')}</td>
+        <td>${nomeLoja(c.EMPRESA_ID)}</td>
+        <td>${moeda(c.VALOR_ABERTURA)}</td>
+        <td>${c.STATUS==='Fechado' ? moeda(c.VALOR_ESPERADO) : '—'}</td>
+        <td>${c.STATUS==='Fechado' ? moeda(c.VALOR_CONTADO) : '—'}</td>
+        <td><span style="color:${corDif}; font-weight:600;">${textoDif}</span></td>
+        <td><span class="badge ${c.STATUS==='Fechado'?'ok':'warn'}">${c.STATUS}</span></td>
+      </tr>`;
+    }).join('') : '<tr class="empty-row"><td colspan="7">Nenhum dia registrado ainda.</td></tr>');
+  }
+
+  ['filtroLojaCaixaFin','filtroDeCaixaFin','filtroAteCaixaFin'].forEach(id => document.getElementById(id).addEventListener('change', renderCaixaFin));
+  document.getElementById('btnLimparFiltroCaixaFin').addEventListener('click', () => {
+    document.getElementById('filtroLojaCaixaFin').value = ''; document.getElementById('filtroDeCaixaFin').value = ''; document.getElementById('filtroAteCaixaFin').value = '';
+    renderCaixaFin();
   });
 
   carregar();
