@@ -136,7 +136,17 @@ auth.onAuthStateChanged(async (user) => {
     telaApp.classList.add('ativo');
     await popularSeletorLoja();
     await filtrarMenuPorPermissao();
-    carregarModulo('DASHBOARD');
+
+    // Depois de um F5, volta pro mesmo módulo que estava aberto, em vez de
+    // sempre cair no Dashboard — lê do endereço (#MODULO), que carregarModulo
+    // atualiza toda vez que você troca de aba.
+    const moduloSalvo = String(location.hash || '').replace('#', '').toUpperCase();
+    const moduloInicial = (moduloSalvo && NOMES_MODULO[moduloSalvo]) ? moduloSalvo : 'DASHBOARD';
+    document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'));
+    const itemCorrespondente = document.querySelector('.menu-item[data-modulo="' + moduloInicial + '"]');
+    if (itemCorrespondente) itemCorrespondente.classList.add('active');
+
+    carregarModulo(moduloInicial);
   } catch (e) {
     mostrarToast('Erro ao carregar seu usuário: ' + e.message, 'erro');
     await fazerLogout();
@@ -210,6 +220,7 @@ async function filtrarMenuPorPermissao(){
 }
 
 async function carregarModulo(modulo){
+  location.hash = modulo; // guarda no endereço da página, pra sobreviver a um F5
   document.getElementById('crumbAtual').textContent = NOMES_MODULO[modulo] || modulo;
   const content = document.getElementById('content');
   content.innerHTML = '<div style="padding:60px;text-align:center;color:var(--text-tertiary);font-family:var(--font-mono);font-size:12.5px;">carregando ' + (NOMES_MODULO[modulo]||modulo).toLowerCase() + '…</div>';
@@ -366,8 +377,8 @@ window.desenharCabecalhoLoja = async function(doc, empresasList){
   }
   if (doc.getTextWidth(nomeMarca) > larguraDisponivelMarca) {
     // Mesmo no tamanho mínimo não coube numa linha — quebra em duas, garantido que não invade a coluna das lojas.
-    doc.text('Mano Papa - ', xMarca, 16);
-    doc.text('Imports', xMarca, 21);
+    doc.text('Mano Papa -', xMarca, 16);
+    doc.text(' Imports', xMarca, 21);
     doc.setFontSize(8.5); doc.setFont(undefined, 'normal'); doc.setTextColor(90);
     doc.text((lojas[0] && lojas[0].EMAIL) || (lojas[0] && lojas[0].INSTAGRAM) || '', xMarca, 27);
   } else {
