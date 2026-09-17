@@ -15,6 +15,7 @@
   <div class="tab" data-tab="horario">Horário de funcionamento</div>
   <div class="tab" data-tab="fidelidade">Fidelidade</div>
   <div class="tab" data-tab="telegram">Telegram (Resumo de Caixa)</div>
+  <div class="tab" data-tab="suporte">Ajuda e Suporte</div>
   <div class="tab" data-tab="empresa">Sobre o Firestore</div>
 </div>
 
@@ -83,6 +84,15 @@
       <button class="btn" id="btnTestarTelegram">Enviar mensagem de teste</button>
     </div>
     <p id="statusTelegram" style="font-size:12px; margin-top:10px;"></p>
+  </div>
+</div>
+
+<div id="painelSuporte" class="tab-panel">
+  <div class="card">
+    <p style="color:var(--text-secondary); font-size:13px; margin:0 0 16px;">Esse é o número que abre quando alguém clica em "Falar com o suporte" na aba Ajuda e Suporte.</p>
+    <div class="ffield" style="max-width:320px;"><label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">WhatsApp do suporte</label>
+      <input id="suporteNumero" placeholder="Ex.: 11987654321 (com DDD)" style="width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px;"></div>
+    <button class="btn btn-primary" id="btnSalvarSuporte">Salvar</button>
   </div>
 </div>
 
@@ -238,13 +248,31 @@
     if (!token || !chatId){ statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Preenche o Token e o Chat ID antes de testar.'; return; }
     statusEl.style.color = 'var(--text-tertiary)'; statusEl.textContent = 'Enviando...';
     try {
-      const resultado = await window.enviarMensagemTelegram(token, chatId, '✅ Teste do Mano Papa — se você recebeu essa mensagem, o resumo de caixa vai funcionar certinho!');
+      const resultado = await window.enviarMensagemTelegram(token, chatId, '✅ Teste do BStyle ERP — se você recebeu essa mensagem, o resumo de caixa vai funcionar certinho!');
       if (resultado.ok) { statusEl.style.color = 'var(--mint)'; statusEl.textContent = '✓ Mensagem de teste enviada — confere no seu Telegram.'; }
       else { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Erro do Telegram: ' + (resultado.description || 'não foi possível enviar. Confere o Token e o Chat ID.'); }
     } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Erro: ' + e.message; }
   });
 
   carregarTelegram();
+
+  // ---------- Ajuda e Suporte (número de WhatsApp) ----------
+  async function carregarSuporte(){
+    let cfg;
+    try { cfg = await dbGetById('CONFIG', 'suporte_whatsapp'); } catch (e) { cfg = null; }
+    document.getElementById('suporteNumero').value = cfg ? cfg.NUMERO||'' : '';
+  }
+  document.getElementById('btnSalvarSuporte').addEventListener('click', async () => {
+    try {
+      if (!(await checarPermissao('CONFIGURACOES','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      const dados = { ID:'suporte_whatsapp', NUMERO: document.getElementById('suporteNumero').value.trim() };
+      const existente = await dbGetById('CONFIG', 'suporte_whatsapp');
+      if (existente) await dbUpdate('CONFIG', 'suporte_whatsapp', dados);
+      else await dbInsert('CONFIG', dados);
+      mostrarToast('Número de suporte salvo.');
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+  carregarSuporte();
 
 })();
 </script>
