@@ -5,6 +5,13 @@
   .filtros{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
   .filtros select, .filtros input{ background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:8px 12px; border-radius:8px; font-size:12.5px; }
   .chart-sub{ font-size:11px; color:var(--text-tertiary); margin:-8px 0 12px; }
+  .modal-overlay{ position:fixed; inset:0; background:rgba(3,5,8,0.6); display:none; align-items:center; justify-content:center; z-index:100; padding:24px; }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:14px; width:100%; max-width:480px; }
+  .modal-head{ display:flex; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--hairline); }
+  .modal-body{ padding:20px 22px; }
+  .modal-foot{ display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--hairline); }
+  .modal-close{ background:none; border:none; color:var(--text-tertiary); font-size:18px; cursor:pointer; }
 </style>
 
 <div class="toolbar"><div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Estoque</h1>
@@ -52,6 +59,22 @@
   <thead><tr><th>Produto</th><th>Categoria</th><th>Loja</th><th>Estoque atual</th><th>Mínimo</th><th>Valor em custo</th><th>Situação</th><th></th></tr></thead>
   <tbody id="linhas"><tr class="empty-row"><td colspan="8">Carregando…</td></tr></tbody>
 </table>
+
+<div class="modal-overlay" id="modalEscolherLista">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-head"><h3 style="font-family:var(--font-display); margin:0;">Adicionar a qual lista?</h3><button class="modal-close" id="fecharModalEscolherLista">✕</button></div>
+    <div class="modal-body">
+      <div id="opcoesListasExistentes" style="display:flex; flex-direction:column; gap:8px; max-height:240px; overflow-y:auto; margin-bottom:16px;"></div>
+      <div style="border-top:1px solid var(--hairline); padding-top:14px;">
+        <label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">Ou cria uma lista nova</label>
+        <div style="display:flex; gap:8px;">
+          <input id="nomeNovaListaSeletor" placeholder="Nome da lista…" style="flex:1; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:13px;">
+          <button class="btn btn-primary" id="btnCriarEUsarLista">Criar e usar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 (async function(){
@@ -259,28 +282,50 @@
     } catch (e) { console.error('Erro no gráfico de categoria:', e); }
   }
 
-  window.__enviarParaListaCompras = async (produtoId) => {
+  // ---------- Seletor de lista (usado sempre que algo é mandado pra Pedidos) ----------
+  let _callbackListaEscolhida = null;
+  async function abrirSeletorDeLista(callback){
+    _callbackListaEscolhida = callback;
+    let listas = [];
+    try { listas = (await dbGetAll('LISTAS_COMPRAS')).sort((a,b) => new Date(b.DATA_CRIACAO) - new Date(a.DATA_CRIACAO)); }
+    catch (e) { mostrarToast('Erro ao buscar as listas: ' + e.message, 'erro'); return; }
+    setHTML('opcoesListasExistentes', listas.length ? listas.map(l => `
+      <button type="button" class="btn" style="justify-content:flex-start; text-align:left;" onclick="window.__escolherListaExistente('${l.ID}','${l.NOME.replace(/'/g,"\\'")}')">${l.NOME}</button>
+    `).join('') : '<p style="color:var(--text-tertiary); font-size:12.5px; margin:0;">Nenhuma lista criada ainda — cria uma nova abaixo.</p>');
+    document.getElementById('nomeNovaListaSeletor').value = '';
+    document.getElementById('modalEscolherLista').classList.add('open');
+  }
+  window.__escolherListaExistente = (id, nome) => {
+    document.getElementById('modalEscolherLista').classList.remove('open');
+    if (_callbackListaEscolhida) _callbackListaEscolhida({ ID: id, NOME: nome });
+  };
+  document.getElementById('fecharModalEscolherLista').addEventListener('click', () => document.getElementById('modalEscolherLista').classList.remove('open'));
+  document.getElementById('btnCriarEUsarLista').addEventListener('click', async () => {
+    const nome = document.getElementById('nomeNovaListaSeletor').value.trim();
+    if (!nome) { mostrarToast('Dá um nome pra lista nova.', 'erro'); return; }
+    try {
+      if (!(await checarPermissao('PEDIDOS','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      const nova = await dbInsert('LISTAS_COMPRAS', { NOME: nome, DATA_CRIACAO: new Date().toISOString(), USUARIO_ID: usuarioAtual.ID });
+      document.getElementById('modalEscolherLista').classList.remove('open');
+      if (_callbackListaEscolhida) _callbackListaEscolhida(nova);
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  window.__enviarParaListaCompras = (produtoId) => {
     const produto = produtos.find(p => p.ID === produtoId);
     if (!produto) return;
     const faltam = Math.max(1, Number(produto.ESTOQUE_MINIMO||0) - Number(produto.ESTOQUE_ATUAL||0));
-    try {
-      if (!(await checarPermissao('ESTOQUE','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
-
-      // Usa (ou cria, se ainda não existir) uma lista fixa "Reposição de Estoque",
-      // já que agora existem várias listas separadas — assim não precisa perguntar
-      // toda vez pra qual lista mandar.
-      const NOME_LISTA_PADRAO = 'Reposição de Estoque';
-      const listasExistentes = await dbGetAll('LISTAS_COMPRAS');
-      let lista = listasExistentes.find(l => l.NOME === NOME_LISTA_PADRAO);
-      if (!lista) lista = await dbInsert('LISTAS_COMPRAS', { NOME: NOME_LISTA_PADRAO, DATA_CRIACAO: new Date().toISOString(), USUARIO_ID: usuarioAtual.ID });
-
-      await dbInsert('LISTA_COMPRAS', {
-        LISTA_ID: lista.ID, DESCRICAO: produto.NOME, QUANTIDADE: faltam, CATEGORIA: produto.CATEGORIA || '', MODELO: '', COR: '',
-        OBSERVACAO: 'Adicionado automaticamente do Estoque (estava com ' + produto.ESTOQUE_ATUAL + ', mínimo é ' + produto.ESTOQUE_MINIMO + ')',
-        DATA_ADICIONADO: new Date().toISOString(), USUARIO_ID: usuarioAtual.ID
-      });
-      mostrarToast('"' + produto.NOME + '" adicionado à lista "' + NOME_LISTA_PADRAO + '" (aba Pedidos).');
-    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+    abrirSeletorDeLista(async (lista) => {
+      try {
+        if (!(await checarPermissao('PEDIDOS','CADASTRAR'))){ mostrarToast('Sem permissão pra usar a lista de Pedidos.', 'erro'); return; }
+        await dbInsert('LISTA_COMPRAS', {
+          LISTA_ID: lista.ID, DESCRICAO: produto.NOME, QUANTIDADE: faltam, CATEGORIA: produto.CATEGORIA || '', MODELO: '', COR: '',
+          OBSERVACAO: 'Adicionado automaticamente do Estoque (estava com ' + produto.ESTOQUE_ATUAL + ', mínimo é ' + produto.ESTOQUE_MINIMO + ')',
+          DATA_ADICIONADO: new Date().toISOString(), USUARIO_ID: usuarioAtual.ID
+        });
+        mostrarToast('"' + produto.NOME + '" adicionado à lista "' + lista.NOME + '" (aba Pedidos).');
+      } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+    });
   };
 
   window.__ajustar = async (id, nome, atualExibido) => {
