@@ -44,6 +44,12 @@
         <div class="ffield"><label>Loja</label><select id="fEmpresa"><option value="">Todas as lojas</option></select></div>
       </div>
       <div class="ffield"><label>Senha inicial *</label><input id="fSenha" type="text" placeholder="Mínimo 6 caracteres"></div>
+      <div class="ffield" id="wrapModulosNovo">
+        <label>Abas que esse funcionário pode acessar</label>
+        <p style="color:var(--text-tertiary); font-size:11px; margin:0 0 8px;">O acesso agora é por pessoa, não por cargo — marca só o que esse funcionário precisa usar.</p>
+        <div id="listaModulosNovo" style="display:grid; grid-template-columns:1fr 1fr; gap:6px; max-height:220px; overflow-y:auto; border:1px solid var(--hairline); border-radius:8px; padding:10px;"></div>
+      </div>
+      <p id="avisoAdminNovo" style="display:none; color:var(--mint); font-size:11.5px; margin:0;">✓ Perfil Administrador — acesso total automático a todas as abas, sem precisar marcar nada aqui.</p>
     </div>
     <div class="modal-foot">
       <button class="btn" id="btnCancelar">Cancelar</button>
@@ -71,6 +77,12 @@
         <div class="ffield"><label>Loja</label><select id="eEmpresa"><option value="">Todas as lojas</option></select></div>
       </div>
       <p style="color:var(--text-tertiary); font-size:11.5px;">Email e senha não podem ser trocados aqui — o funcionário usa "Esqueci minha senha" na tela de login se precisar redefinir.</p>
+      <div class="ffield" id="wrapModulosEditar">
+        <label>Abas que esse funcionário pode acessar</label>
+        <p style="color:var(--text-tertiary); font-size:11px; margin:0 0 8px;">O acesso agora é por pessoa, não por cargo — marca só o que esse funcionário precisa usar.</p>
+        <div id="listaModulosEditar" style="display:grid; grid-template-columns:1fr 1fr; gap:6px; max-height:220px; overflow-y:auto; border:1px solid var(--hairline); border-radius:8px; padding:10px;"></div>
+      </div>
+      <p id="avisoAdminEditar" style="display:none; color:var(--mint); font-size:11.5px; margin:0;">✓ Perfil Administrador — acesso total automático a todas as abas, sem precisar marcar nada aqui.</p>
     </div>
     <div class="modal-foot">
       <button class="btn" id="btnCancelarEditar">Cancelar</button>
@@ -85,6 +97,25 @@
 
   function nomePerfil(id){ const p = perfis.find(x=>x.ID===id); return p?p.NOME:'—'; }
   function nomeEmpresa(id){ if (!id) return 'Todas'; const e = empresas.find(x=>x.ID===id); return e?e.NOME:'—'; }
+  function perfilSelecionadoEhAdmin(perfilId){ const p = perfis.find(x=>x.ID===perfilId); return !!(p && String(p.NOME).trim().toLowerCase() === 'administrador'); }
+
+  /** Monta a checklist de abas — reaproveitada nos dois formulários (novo e editar). */
+  function montarChecklistModulos(containerId, selecionados){
+    setHTML(containerId, MODULOS_SISTEMA.map(m => `
+      <label style="display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:400; margin:0; cursor:pointer;">
+        <input type="checkbox" value="${m}" ${selecionados.includes(m)?'checked':''} style="width:auto;">
+        ${NOMES_MODULO[m] || m}
+      </label>
+    `).join(''));
+  }
+  function modulosMarcados(containerId){
+    return [...document.querySelectorAll('#' + containerId + ' input:checked')].map(el => el.value);
+  }
+  function atualizarVisibilidadeChecklist(perfilId, wrapId, avisoId){
+    const ehAdmin = perfilSelecionadoEhAdmin(perfilId);
+    document.getElementById(wrapId).style.display = ehAdmin ? 'none' : 'block';
+    document.getElementById(avisoId).style.display = ehAdmin ? 'block' : 'none';
+  }
 
   function renderLinhas(lista){
     if (!lista.length){ setHTML('linhas', '<tr class="empty-row"><td colspan="6">Nenhum funcionário cadastrado.</td></tr>'); return; }
@@ -120,8 +151,11 @@
   document.getElementById('btnNovo').addEventListener('click', () => {
     ['fNome','fEmail','fCargo','fTelefone','fSenha'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('fPerfil').value = ''; document.getElementById('fEmpresa').value = '';
+    montarChecklistModulos('listaModulosNovo', []);
+    atualizarVisibilidadeChecklist('', 'wrapModulosNovo', 'avisoAdminNovo');
     modal.classList.add('open');
   });
+  document.getElementById('fPerfil').addEventListener('change', (e) => atualizarVisibilidadeChecklist(e.target.value, 'wrapModulosNovo', 'avisoAdminNovo'));
   document.getElementById('fecharModal').addEventListener('click', () => modal.classList.remove('open'));
   document.getElementById('btnCancelar').addEventListener('click', () => modal.classList.remove('open'));
 
@@ -139,7 +173,8 @@
       await criarFuncionarioComLogin({
         NOME: nome, EMAIL: email, CARGO: document.getElementById('fCargo').value.trim(),
         TELEFONE: document.getElementById('fTelefone').value.trim(), PERFIL_ID: perfilId,
-        EMPRESA_ID: document.getElementById('fEmpresa').value
+        EMPRESA_ID: document.getElementById('fEmpresa').value,
+        MODULOS_PERMITIDOS: modulosMarcados('listaModulosNovo')
       }, senha);
       mostrarToast('Funcionário criado com sucesso.');
       modal.classList.remove('open');
@@ -161,8 +196,11 @@
     document.getElementById('eStatus').value = f.STATUS || 'Ativo';
     document.getElementById('ePerfil').value = f.PERFIL_ID || '';
     document.getElementById('eEmpresa').value = f.EMPRESA_ID || '';
+    montarChecklistModulos('listaModulosEditar', Array.isArray(f.MODULOS_PERMITIDOS) ? f.MODULOS_PERMITIDOS : []);
+    atualizarVisibilidadeChecklist(f.PERFIL_ID, 'wrapModulosEditar', 'avisoAdminEditar');
     modalEditar.classList.add('open');
   };
+  document.getElementById('ePerfil').addEventListener('change', (e) => atualizarVisibilidadeChecklist(e.target.value, 'wrapModulosEditar', 'avisoAdminEditar'));
   document.getElementById('fecharModalEditar').addEventListener('click', () => modalEditar.classList.remove('open'));
   document.getElementById('btnCancelarEditar').addEventListener('click', () => modalEditar.classList.remove('open'));
 
@@ -173,7 +211,8 @@
       await dbUpdate('USUARIOS', id, {
         NOME: document.getElementById('eNome').value.trim(), CARGO: document.getElementById('eCargo').value.trim(),
         TELEFONE: document.getElementById('eTelefone').value.trim(), STATUS: document.getElementById('eStatus').value,
-        PERFIL_ID: document.getElementById('ePerfil').value, EMPRESA_ID: document.getElementById('eEmpresa').value
+        PERFIL_ID: document.getElementById('ePerfil').value, EMPRESA_ID: document.getElementById('eEmpresa').value,
+        MODULOS_PERMITIDOS: modulosMarcados('listaModulosEditar')
       });
       mostrarToast('Funcionário atualizado.');
       modalEditar.classList.remove('open');
