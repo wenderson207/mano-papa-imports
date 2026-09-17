@@ -10,9 +10,9 @@
  */
 
 const MODULOS_SISTEMA = [
-  'DASHBOARD', 'EMPRESAS', 'FUNCIONARIOS', 'CLIENTES', 'PRODUTOS', 'ESTOQUE',
-  'COMPRAS', 'FORNECEDORES', 'VENDAS', 'ORCAMENTOS', 'ASSISTENCIA', 'GARANTIAS',
-  'FINANCEIRO', 'RELATORIOS', 'CONFIGURACOES'
+  'DASHBOARD', 'CAIXA', 'AGENDA', 'EMPRESAS', 'FUNCIONARIOS', 'CLIENTES', 'PRODUTOS', 'CELULARES', 'ESTOQUE',
+  'PEDIDOS', 'DIVERGENCIAS_ESTOQUE', 'COMPRAS', 'FORNECEDORES', 'VENDAS', 'ORCAMENTOS', 'ASSISTENCIA', 'GARANTIAS',
+  'CONTROLE_PONTO', 'FINANCEIRO', 'RELATORIOS', 'CONFIGURACOES'
 ];
 const PERFIS_PADRAO = ['Administrador', 'Gerente', 'Financeiro', 'Vendedor', 'Técnico', 'Estoquista'];
 
@@ -58,14 +58,20 @@ async function perfilEhAdministrador(perfilId) {
   return resultado;
 }
 
-/** Administrador sempre tem acesso total; outros perfis dependem da tabela PERMISSOES. */
+/**
+ * Administrador sempre tem acesso total. Pra todo mundo, o acesso não é mais
+ * por CARGO/PERFIL — é uma lista de abas liberadas direto no cadastro de
+ * cada funcionário (campo MODULOS_PERMITIDOS). Uma vez que a aba está
+ * liberada, o funcionário pode fazer tudo nela (ver, cadastrar, editar,
+ * excluir) — não tem mais controle fino por ação dentro do módulo.
+ */
 async function checarPermissao(modulo, acao) {
   if (!usuarioAtual) return false;
+  if (modulo === 'AJUDA') return true; // ajuda/suporte fica liberado pra todo mundo, sempre
   if (await perfilEhAdministrador(usuarioAtual.PERFIL_ID)) return true;
 
-  const permissoes = await dbQuery('PERMISSOES', { PERFIL_ID: usuarioAtual.PERFIL_ID, MODULO: modulo });
-  const permissao = permissoes[0];
-  return !!(permissao && permissao[acao] === true);
+  const permitidos = usuarioAtual.MODULOS_PERMITIDOS || [];
+  return permitidos.includes(modulo);
 }
 
 /**
@@ -88,6 +94,7 @@ async function criarFuncionarioComLogin(dados, senhaInicial) {
       NOME: dados.NOME, EMAIL: String(dados.EMAIL).trim().toLowerCase(),
       CARGO: dados.CARGO || '', TELEFONE: dados.TELEFONE || '',
       PERFIL_ID: dados.PERFIL_ID || '', EMPRESA_ID: dados.EMPRESA_ID || '',
+      MODULOS_PERMITIDOS: Array.isArray(dados.MODULOS_PERMITIDOS) ? dados.MODULOS_PERMITIDOS : [],
       STATUS: 'Ativo', DATA_ADMISSAO: dados.DATA_ADMISSAO || new Date().toISOString(),
       OBSERVACOES: dados.OBSERVACOES || '', DATA_CRIACAO: new Date().toISOString()
     };
