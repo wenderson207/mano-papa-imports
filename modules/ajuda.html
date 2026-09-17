@@ -103,7 +103,7 @@
       const cfg = await dbGetById('CONFIG', 'suporte_whatsapp');
       numero = cfg ? cfg.NUMERO : '';
     } catch (e) { numero = ''; }
-    const texto = encodeURIComponent('Oi! Preciso de ajuda com o sistema BSTYLE ERP.');
+    const texto = encodeURIComponent('Oi! Preciso de ajuda com o sistema Mano Papa ERP.');
     if (numero) window.open('https://wa.me/' + numero.replace(/\D/g,'') + '?text=' + texto, '_blank');
     else window.open('https://wa.me/?text=' + texto, '_blank');
   });
