@@ -127,6 +127,21 @@
         </div>
       </div>
       <div class="ffield"><label>Observação final</label><textarea id="eObservacao" style="width:100%; min-height:80px; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; font-family:inherit; box-sizing:border-box;" placeholder="Ex.: cliente pediu nota em nome de outra pessoa, combinou de trocar depois, etc."></textarea></div>
+
+      <div class="frow2">
+        <div class="ffield"><label>Valor total (R$)</label><input id="eValorTotal" type="number" step="0.01"></div>
+        <div class="ffield"><label>Forma de pagamento</label>
+          <select id="eFormaPagamento">
+            <option value="Dinheiro">Dinheiro</option><option value="PIX">PIX</option>
+            <option value="Cartão de Débito">Cartão de Débito</option><option value="Cartão de Crédito">Cartão de Crédito</option>
+            <option value="Combinado">Combinado</option>
+          </select>
+        </div>
+      </div>
+      <div class="ffield" id="wrapMotivoAjusteVenda" style="display:none; background:rgba(255,166,35,0.08); border:1px solid var(--amber); border-radius:10px; padding:12px 14px;">
+        <label style="color:var(--amber);">⚠ Motivo do ajuste (obrigatório — vai pra Divergências)</label>
+        <textarea id="eMotivoAjuste" style="width:100%; min-height:60px; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; font-family:inherit; box-sizing:border-box;" placeholder="Ex.: venda cadastrada com valor errado, cliente pagou em PIX mas foi lançado como dinheiro..."></textarea>
+      </div>
     </div>
     <div class="modal-foot"><button class="btn" id="fecharModalEditarVenda2">Cancelar</button><button class="btn btn-primary" id="btnSalvarEdicaoVenda">Salvar</button></div>
   </div>
@@ -554,7 +569,7 @@
       }
 
       await dbInsert('FINANCEIRO', {
-        TIPO:'Receita', CATEGORIA:'Venda', DESCRICAO:'Venda '+venda.ID, VALOR: valorTotal,
+        EMPRESA_ID: venda.EMPRESA_ID || '', TIPO:'Receita', CATEGORIA:'Venda', DESCRICAO:'Venda '+venda.ID, VALOR: valorTotal,
         FORMA_PAGAMENTO: formaPagamento, DATA_VENCIMENTO: new Date().toISOString(), DATA_PAGAMENTO: new Date().toISOString(), STATUS:'Pago',
         ORIGEM_TIPO: 'VENDA', ORIGEM_ID: venda.ID
       });
@@ -701,20 +716,36 @@
    */
   // ---------- Editar venda (cliente e observação, depois de já finalizada) ----------
   let clienteSelecionadoEdicao = null;
+  let vendaOriginalEdicao = null;
 
   window.__editarVenda = (vendaId) => {
     const venda = historicoVendas.find(v => v.ID === vendaId);
     if (!venda) return;
+    vendaOriginalEdicao = venda;
 
     document.getElementById('eVendaId').value = vendaId;
     document.getElementById('eObservacao').value = venda.OBSERVACOES || '';
     document.getElementById('eBuscaCliente').value = '';
+    document.getElementById('eValorTotal').value = venda.VALOR_TOTAL || 0;
+    document.getElementById('eFormaPagamento').value = venda.FORMA_PAGAMENTO || 'Dinheiro';
+    document.getElementById('eMotivoAjuste').value = '';
+    document.getElementById('wrapMotivoAjusteVenda').style.display = 'none';
 
     clienteSelecionadoEdicao = todosClientes.find(c => c.ID === venda.CLIENTE_ID) || null;
     atualizarClienteSelecionadoEdicao();
 
     document.getElementById('modalEditarVenda').classList.add('open');
   };
+
+  /** Só pede o motivo quando o valor ou a forma de pagamento realmente mudaram. */
+  function verificarSeMudouValorOuForma(){
+    if (!vendaOriginalEdicao) return;
+    const valorMudou = Number(document.getElementById('eValorTotal').value) !== Number(vendaOriginalEdicao.VALOR_TOTAL||0);
+    const formaMudou = document.getElementById('eFormaPagamento').value !== (vendaOriginalEdicao.FORMA_PAGAMENTO||'Dinheiro');
+    document.getElementById('wrapMotivoAjusteVenda').style.display = (valorMudou || formaMudou) ? 'block' : 'none';
+  }
+  document.getElementById('eValorTotal').addEventListener('input', verificarSeMudouValorOuForma);
+  document.getElementById('eFormaPagamento').addEventListener('change', verificarSeMudouValorOuForma);
 
   function atualizarClienteSelecionadoEdicao(){
     const wrap = document.getElementById('eClienteSelecionadoWrap');
@@ -753,18 +784,46 @@
     const vendaId = document.getElementById('eVendaId').value;
     try {
       if (!(await checarPermissao('VENDAS','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+
+      const novoValor = Number(document.getElementById('eValorTotal').value) || 0;
+      const novaForma = document.getElementById('eFormaPagamento').value;
+      const valorAntigo = Number(vendaOriginalEdicao.VALOR_TOTAL||0);
+      const formaAntiga = vendaOriginalEdicao.FORMA_PAGAMENTO||'Dinheiro';
+      const valorMudou = novoValor !== valorAntigo;
+      const formaMudou = novaForma !== formaAntiga;
+      const motivo = document.getElementById('eMotivoAjuste').value.trim();
+      const dataVendaOriginal = vendaOriginalEdicao.DATA;
+
+      if ((valorMudou || formaMudou) && !motivo) {
+        mostrarToast('Descreve o motivo do ajuste de valor/pagamento antes de salvar.', 'erro');
+        document.getElementById('eMotivoAjuste').focus();
+        return;
+      }
+
       await dbUpdate('VENDAS', vendaId, {
         CLIENTE_ID: clienteSelecionadoEdicao ? clienteSelecionadoEdicao.ID : '',
-        OBSERVACOES: document.getElementById('eObservacao').value.trim()
+        OBSERVACOES: document.getElementById('eObservacao').value.trim(),
+        VALOR_TOTAL: novoValor, FORMA_PAGAMENTO: novaForma
       });
-      mostrarToast('Venda atualizada.');
+
+      if (valorMudou || formaMudou) {
+        await dbInsert('DIVERGENCIAS_ESTOQUE', {
+          TIPO: 'VENDA', VENDA_ID: vendaId,
+          NOME_PRODUTO: 'Venda de ' + dataHoraBR(dataVendaOriginal) + (clienteSelecionadoEdicao ? ' — ' + clienteSelecionadoEdicao.NOME : ''),
+          VALOR_ANTIGO: valorAntigo, VALOR_NOVO: novoValor,
+          FORMA_ANTIGA: formaAntiga, FORMA_NOVA: novaForma,
+          MOTIVO: motivo, USUARIO_ID: usuarioAtual.ID, DATA: new Date().toISOString()
+        });
+      }
+
+      mostrarToast('Venda atualizada.' + (valorMudou||formaMudou ? ' Ajuste registrado em Divergências.' : ''));
       fecharModalEditarVenda();
       carregarHistorico();
     } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
   });
 
   window.__excluirVenda = async (vendaId) => {
-    if (!confirm('Excluir esta venda? O estoque dos itens será devolvido e o lançamento financeiro cancelado. Essa ação não pode ser desfeita.')) return;
+    if (!confirm('Excluir esta venda? O estoque dos itens será devolvido, o lançamento financeiro cancelado, e se tiver pagamento de OS de assistência técnica, ele volta a ficar pendente. Essa ação não pode ser desfeita.')) return;
     try {
       if (!(await checarPermissao('VENDAS','EXCLUIR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
 
@@ -772,6 +831,21 @@
       const itensDaVenda = await dbQuery('ITENS_VENDA', { VENDA_ID: vendaId });
 
       for (const item of itensDaVenda) {
+        if (item.OS_ID) {
+          // Item vinculado a uma OS de assistência técnica (não é estoque físico) — precisa
+          // desfazer o pagamento que essa venda registrou na OS, senão ela fica "paga" pra sempre,
+          // mesmo depois de excluída, e não dá pra lançar o pagamento certo de novo.
+          const os = await dbGetById('ASSISTENCIAS', item.OS_ID);
+          if (os) {
+            let pagamentos = [];
+            try { pagamentos = JSON.parse(os.PAGAMENTOS_OS || '[]'); } catch(e) {}
+            const antesDeLimpar = pagamentos.length;
+            pagamentos = pagamentos.filter(p => p.vendaId !== vendaId);
+            if (pagamentos.length !== antesDeLimpar) await dbUpdate('ASSISTENCIAS', item.OS_ID, { PAGAMENTOS_OS: JSON.stringify(pagamentos) });
+          }
+          await dbDelete('ITENS_VENDA', item.ID);
+          continue;
+        }
         const produto = await dbGetById('PRODUTOS', item.PRODUTO_ID);
         if (produto) {
           await dbUpdate('PRODUTOS', produto.ID, { ESTOQUE_ATUAL: (Number(produto.ESTOQUE_ATUAL)||0) + Number(item.QUANTIDADE) });
@@ -815,7 +889,7 @@
    * fundo claro, ótimo como imagem de chat. Isso evita de vez qualquer problema de
    * emoji corrompido, já que vira uma imagem, não texto. */
   function montarCartaoVenda(venda, cliente, itens, logoDataUrl){
-    const nomeLoja = 'BSTYLE - Eletrônicos & Acessórios';
+    const nomeLoja = 'Mano Papa - Imports';
     const logoHtml = logoDataUrl
       ? `<div style="background:#fff; border-radius:10px; padding:6px 9px; flex-shrink:0; display:flex; align-items:center; box-shadow:0 2px 6px rgba(0,0,0,0.15);"><img src="${logoDataUrl}" style="height:34px; width:auto; object-fit:contain; display:block;"></div>`
       : `<div style="width:46px; height:46px; background:#fff; border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px; color:#e2401c; flex-shrink:0; box-shadow:0 2px 6px rgba(0,0,0,0.15);">B</div>`;
@@ -877,7 +951,7 @@
 
           <div style="text-align:center; padding:18px 28px 24px;">
             <div style="font-size:13px; color:#444; font-weight:600;">Obrigado pela preferência, ${cliente.NOME}! 🙏</div>
-            <div style="font-size:10.5px; color:#aaa; margin-top:6px;">BSTYLE - Eletrônicos & Acessórios</div>
+            <div style="font-size:10.5px; color:#aaa; margin-top:6px;">Mano Papa - Imports</div>
           </div>
 
         </div>
@@ -965,7 +1039,7 @@
       <body>
         <div class="centro">
           ${logoDataUrl ? `<img class="logo" src="${logoDataUrl}">` : ''}
-          <div class="nome-loja">BSTYLE - Eletrônicos & Acessórios</div>
+          <div class="nome-loja">Mano Papa - Imports</div>
           ${endereco ? `<div class="pequeno">${endereco}</div>` : ''}
           ${empresa.WHATSAPP ? `<div class="pequeno">Tel: ${empresa.WHATSAPP}</div>` : ''}
           ${empresa.CNPJ ? `<div class="pequeno">CNPJ: ${empresa.CNPJ}</div>` : ''}
