@@ -10,13 +10,37 @@
  */
 
 const NOMES_MODULO = {
-  DASHBOARD:'Dashboard', AGENDA:'Agenda', CLIENTES:'Clientes', PRODUTOS:'Produtos', FORNECEDORES:'Fornecedores',
+  DASHBOARD:'Dashboard', CAIXA:'Caixa Diário', AGENDA:'Agenda', CLIENTES:'Clientes', PRODUTOS:'Produtos', FORNECEDORES:'Fornecedores',
   FUNCIONARIOS:'Funcionários', EMPRESAS:'Empresas', VENDAS:'Vendas (PDV)', ORCAMENTOS:'Orçamentos',
   COMPRAS:'Compras', ESTOQUE:'Estoque', ASSISTENCIA:'Assistência técnica', GARANTIAS:'Garantias',
   FINANCEIRO:'Financeiro', RELATORIOS:'Relatórios', CONFIGURACOES:'Configurações', CELULARES:'Celulares', DIVERGENCIAS_ESTOQUE:'Divergências de Estoque', CONTROLE_PONTO:'Controle de Ponto', PEDIDOS:'Pedidos'
 };
 
 // ---------- Toast global ----------
+/** Manda uma mensagem de texto por um Bot do Telegram — chamada direto do
+ * navegador, sem precisar de servidor. Retorna a resposta crua da API do
+ * Telegram ({ok:true,...} ou {ok:false, description:"..."}). */
+/** Carrega a biblioteca html2canvas sob demanda (só quando alguma tela
+ * realmente precisa gerar imagem) — compartilhada entre todos os módulos. */
+window.carregarHtml2Canvas = function(){
+  return new Promise(resolve => {
+    if (window.html2canvas) return resolve();
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = resolve; s.onerror = resolve;
+    document.head.appendChild(s);
+  });
+};
+
+window.enviarMensagemTelegram = async function(token, chatId, texto){
+  const resp = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text: texto, parse_mode: 'Markdown' })
+  });
+  return await resp.json();
+};
+
 function mostrarToast(mensagem, tipo){
   const wrap = document.getElementById('toastWrap');
   const el = document.createElement('div');
@@ -27,7 +51,7 @@ function mostrarToast(mensagem, tipo){
 }
 
 // ---------- Loja ativa (filtro global) ----------
-window.lojaAtivaId = sessionStorage.getItem('mano_papa_loja') || '';
+window.lojaAtivaId = sessionStorage.getItem('mano_papa_ativa') || '';
 
 async function popularSeletorLoja(){
   const sel = document.getElementById('seletorLojaGlobal');
@@ -41,7 +65,7 @@ async function popularSeletorLoja(){
     window.__seletorLojaWired = true;
     sel.addEventListener('change', () => {
       window.lojaAtivaId = sel.value;
-      sessionStorage.setItem('mano_papa_loja', sel.value);
+      sessionStorage.setItem('mano_papa_ativa', sel.value);
       mostrarToast(sel.value ? 'Mostrando dados de: ' + sel.options[sel.selectedIndex].text : 'Mostrando todas as lojas');
       window.recarregarModuloAtual();
     });
@@ -111,6 +135,7 @@ auth.onAuthStateChanged(async (user) => {
     telaLogin.style.display = 'none';
     telaApp.classList.add('ativo');
     await popularSeletorLoja();
+    await filtrarMenuPorPermissao();
     carregarModulo('DASHBOARD');
   } catch (e) {
     mostrarToast('Erro ao carregar seu usuário: ' + e.message, 'erro');
@@ -172,6 +197,17 @@ document.querySelectorAll('.menu-item').forEach(item => {
     carregarModulo(item.getAttribute('data-modulo'));
   });
 });
+
+/** Esconde do menu lateral as abas que esse funcionário não pode acessar —
+ * administrador sempre vê tudo, o resto vê só o que foi marcado no cadastro dele. */
+async function filtrarMenuPorPermissao(){
+  const souAdmin = await perfilEhAdministrador(usuarioAtual.PERFIL_ID);
+  const permitidos = usuarioAtual.MODULOS_PERMITIDOS || [];
+  document.querySelectorAll('.menu-item').forEach(item => {
+    const modulo = item.getAttribute('data-modulo');
+    item.style.display = (souAdmin || permitidos.includes(modulo)) ? '' : 'none';
+  });
+}
 
 async function carregarModulo(modulo){
   document.getElementById('crumbAtual').textContent = NOMES_MODULO[modulo] || modulo;
@@ -330,8 +366,8 @@ window.desenharCabecalhoLoja = async function(doc, empresasList){
   }
   if (doc.getTextWidth(nomeMarca) > larguraDisponivelMarca) {
     // Mesmo no tamanho mínimo não coube numa linha — quebra em duas, garantido que não invade a coluna das lojas.
-    doc.text('Mano Papa - Imports', xMarca, 16);
-    doc.text('& Acessórios', xMarca, 21);
+    doc.text('Mano Papa - ', xMarca, 16);
+    doc.text('Imports', xMarca, 21);
     doc.setFontSize(8.5); doc.setFont(undefined, 'normal'); doc.setTextColor(90);
     doc.text((lojas[0] && lojas[0].EMAIL) || (lojas[0] && lojas[0].INSTAGRAM) || '', xMarca, 27);
   } else {
