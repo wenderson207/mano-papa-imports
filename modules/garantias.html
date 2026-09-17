@@ -195,7 +195,7 @@
         <div style="display:flex; align-items:center; gap:10px;">
           <img src="assets/img/Logo.png" style="height:52px; width:auto; max-width:90px; object-fit:contain;" onerror="this.style.display='none'">
           <div>
-            <div style="font-size:19px; font-weight:800; color:#e2401c; letter-spacing:0.4px;">BSTYLE - Eletrônicos & Acessórios</div>
+            <div style="font-size:19px; font-weight:800; color:#e2401c; letter-spacing:0.4px;">Mano Papa - Imports</div>
             <div style="font-size:9.5px; color:#666;">📷 ${empresaPrincipal.INSTAGRAM || (empresaPrincipal.EMAIL||'')}</div>
           </div>
         </div>
@@ -260,7 +260,7 @@
 
   function montarHtmlImpressaoManutencao(via){
     const cliente = clientePorId(garantiaAtual.CLIENTE_ID);
-    const nomeLojaTexto = 'BSTYLE - Eletrônicos & Acessórios';
+    const nomeLojaTexto = 'Mano Papa - Imports';
     return `
     <div style="width:720px; margin:0 auto 26px; padding:34px; font-family:'Segoe UI',Arial,sans-serif; color:#1a1a1a; page-break-after:always; box-sizing:border-box;">
       ${cabecalhoHtmlPadrao()}
@@ -460,7 +460,7 @@
 
         } else {
           const cliente = clientePorId(garantiaAtual.CLIENTE_ID);
-          const nomeLojaTexto = 'BSTYLE - Eletrônicos & Acessórios';
+          const nomeLojaTexto = 'Mano Papa - Imports';
 
           secao('1. IDENTIFICAÇÃO DO CLIENTE');
           linha('Cliente:', cliente.NOME); linha('CPF:', cliente.CPF);
