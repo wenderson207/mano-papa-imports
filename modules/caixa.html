@@ -1,0 +1,304 @@
+<style>
+  .ffield{ margin-bottom:14px; }
+  .ffield label{ display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px; }
+  .ffield input, .ffield select{ width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; }
+  .frow2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+</style>
+
+<div class="toolbar">
+  <div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Caixa Diário</h1>
+  <p style="color:var(--text-secondary); font-size:13px; margin:0;">Confere se o dinheiro que devia ter no caixa bate com o que tem de verdade, no fim do dia.</p></div>
+</div>
+
+<div class="card" style="background:var(--bg-surface); border:1px solid var(--hairline); border-radius:12px; padding:20px 22px;">
+  <div id="caixaConteudo">Carregando…</div>
+</div>
+
+<script>
+(async function(){
+  function moeda(v){ return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
+
+  let empresas = [];
+  function nomeLoja(id){ if (!id) return 'Compartilhado'; const e = empresas.find(x=>x.ID===id); return e?e.NOME:'—'; }
+
+  function chaveDoDiaCaixa(lojaId){ return (lojaId||'sem-loja') + '_' + new Date().toISOString().substring(0,10); }
+
+  async function carregarCaixa(){
+    const el = document.getElementById('caixaConteudo');
+    try {
+      if (!(await checarPermissao('CAIXA','VISUALIZAR'))){ el.textContent = 'Sem permissão.'; return; }
+      empresas = await dbGetAll('EMPRESAS');
+      const lojaId = window.lojaAtivaId || await obterLojaParaAcao('Caixa de qual loja você quer conferir?');
+      if (!lojaId) { el.textContent = 'Escolha uma loja pra ver o caixa.'; return; }
+      const idDia = chaveDoDiaCaixa(lojaId);
+      const caixaHoje = await dbGetById('CAIXA', idDia);
+
+      if (!caixaHoje || caixaHoje.STATUS === 'Fechado') {
+        el.innerHTML = `
+          <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">${caixaHoje ? 'Caixa de hoje já foi fechado. Você pode abrir de novo se precisar lançar algo a mais.' : 'Caixa de hoje ainda não foi aberto.'}</p>
+          <div class="frow2" style="max-width:400px;">
+            <div class="ffield"><label>Valor inicial em caixa (R$)</label><input id="valorAbertura" type="number" step="0.01" value="0"></div>
+          </div>
+          <button class="btn btn-primary" id="btnAbrirCaixa">Abrir caixa</button>`;
+        document.getElementById('btnAbrirCaixa').addEventListener('click', async () => {
+          try {
+            if (!(await checarPermissao('CAIXA','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+            await dbInsert('CAIXA', { ID: idDia, EMPRESA_ID: lojaId, DATA: new Date().toISOString(), VALOR_ABERTURA: Number(document.getElementById('valorAbertura').value)||0, STATUS: 'Aberto', USUARIO_ABERTURA: usuarioAtual.ID });
+            mostrarToast('Caixa aberto.'); carregarCaixa();
+          } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+        });
+        return;
+      }
+
+      const vendasHoje = (await dbGetAll('VENDAS')).filter(v => v.EMPRESA_ID === lojaId && v.STATUS === 'Concluída' && new Date(v.DATA).toDateString() === new Date().toDateString());
+
+      // Detalha por forma de pagamento de verdade (Dinheiro, PIX, Débito, Crédito) —
+      // vendas "Combinada" são quebradas nas partes de FORMAS_PAGAMENTO, senão ficariam
+      // escondidas numa categoria só.
+      const porForma = { 'Dinheiro':0, 'PIX':0, 'Cartão de Débito':0, 'Cartão de Crédito':0 };
+      vendasHoje.forEach(v => {
+        if (v.FORMA_PAGAMENTO === 'Combinado' && Array.isArray(v.FORMAS_PAGAMENTO)) {
+          v.FORMAS_PAGAMENTO.forEach(f => { porForma[f.forma] = (porForma[f.forma]||0) + Number(f.valor||0); });
+        } else {
+          porForma[v.FORMA_PAGAMENTO] = (porForma[v.FORMA_PAGAMENTO]||0) + Number(v.VALOR_TOTAL||0);
+        }
+      });
+      const dinheiroHoje = porForma['Dinheiro'];
+      const totalVendidoHoje = vendasHoje.reduce((s,v)=>s+Number(v.VALOR_TOTAL||0),0);
+      const esperadoEmCaixa = Number(caixaHoje.VALOR_ABERTURA||0) + dinheiroHoje;
+
+      el.innerHTML = `
+        <div class="kpi-grid" style="margin-bottom:18px;">
+          <div class="kpi"><div class="lbl">Abertura</div><div class="val">${moeda(caixaHoje.VALOR_ABERTURA)}</div></div>
+          <div class="kpi"><div class="lbl">Total vendido hoje</div><div class="val">${moeda(totalVendidoHoje)}</div></div>
+          <div class="kpi"><div class="lbl">Esperado em caixa (dinheiro)</div><div class="val">${moeda(esperadoEmCaixa)}</div></div>
+        </div>
+        <div class="kpi-grid" style="margin-bottom:18px;">
+          <div class="kpi"><div class="lbl">\u{1F4B5} Dinheiro</div><div class="val">${moeda(porForma['Dinheiro'])}</div></div>
+          <div class="kpi"><div class="lbl">\u{1F4A0} PIX</div><div class="val">${moeda(porForma['PIX'])}</div></div>
+          <div class="kpi"><div class="lbl">\u{1F4B3} Débito</div><div class="val">${moeda(porForma['Cartão de Débito'])}</div></div>
+          <div class="kpi"><div class="lbl">\u{1F4B3} Crédito</div><div class="val">${moeda(porForma['Cartão de Crédito'])}</div></div>
+        </div>
+        <div class="frow2" style="max-width:400px;">
+          <div class="ffield"><label>Valor contado ao fechar (R$)</label><input id="valorContado" type="number" step="0.01"></div>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-primary" id="btnFecharCaixa">Fechar caixa</button>
+          <button class="btn" id="btnResumoWpp">\u{1F4AC} Mandar resumo do dia no WhatsApp</button>
+          <button class="btn" id="btnResumoImagem">\u{1F4F8} Gerar imagem do resumo</button>
+        </div>
+        <div id="resultadoFechamento" style="margin-top:14px; font-size:13px;"></div>
+
+        <div style="margin-top:20px; border-top:1px solid var(--hairline); padding-top:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <label style="font-size:12px; color:var(--text-secondary);">Texto do resumo (se o WhatsApp não abrir certo, copia daqui)</label>
+            <button class="btn" id="btnCopiarTextoResumo" style="padding:6px 10px; font-size:11.5px;">\u{1F4CB} Copiar texto</button>
+          </div>
+          <textarea id="textoResumoVisivel" readonly style="width:100%; min-height:150px; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:12px; border-radius:8px; font-size:12.5px; font-family:var(--font-mono); box-sizing:border-box; resize:vertical;"></textarea>
+        </div>`;
+
+      // Emojis escritos como \u{...} em vez do caractere literal — o navegador
+      // reconstrói o caractere certinho a partir do código, sem depender da
+      // integridade dos bytes do arquivo (esse arquivo passa por camadas que
+      // às vezes corrompem emoji, como já vimos antes no comprovante de venda).
+      const EMOJI_RESUMO = {
+        grafico: '\u{1F4CA}', dinheiro: '\u{1F4B5}', pix: '\u{1F4A0}', cartao: '\u{1F4B3}',
+        certo: '\u{2705}', azul: '\u{1F535}', vermelho: '\u{1F534}'
+      };
+
+      function montarTextoResumoDia(diferenca){
+        const linha = '- - - - - - - - - - -';
+        let texto = `${EMOJI_RESUMO.grafico} *Resumo do dia — ${nomeLoja(lojaId)}*\n${new Date().toLocaleDateString('pt-BR')}\n${linha}\n`
+          + `Abertura de caixa: ${moeda(caixaHoje.VALOR_ABERTURA)}\n\n`
+          + `${EMOJI_RESUMO.dinheiro} Dinheiro: ${moeda(porForma['Dinheiro'])}\n`
+          + `${EMOJI_RESUMO.pix} PIX: ${moeda(porForma['PIX'])}\n`
+          + `${EMOJI_RESUMO.cartao} Débito: ${moeda(porForma['Cartão de Débito'])}\n`
+          + `${EMOJI_RESUMO.cartao} Crédito: ${moeda(porForma['Cartão de Crédito'])}\n`
+          + `${linha}\n*Total vendido: ${moeda(totalVendidoHoje)}*\n`
+          + `Esperado em caixa (dinheiro): ${moeda(esperadoEmCaixa)}`;
+        if (diferenca !== undefined && !isNaN(diferenca)) {
+          texto += `\n${linha}\n` + (diferenca === 0 ? `${EMOJI_RESUMO.certo} Caixa bateu certinho!` : diferenca > 0 ? `${EMOJI_RESUMO.azul} Sobrou ${moeda(diferenca)} no caixa.` : `${EMOJI_RESUMO.vermelho} Faltou ${moeda(Math.abs(diferenca))} no caixa.`);
+        }
+        return texto;
+      }
+
+      async function copiarResumoParaAreaTransferencia(texto){
+        try { await navigator.clipboard.writeText(texto); mostrarToast('Resumo copiado — já pode colar onde quiser.'); }
+        catch (e) {
+          // Se a API de área de transferência não deixar (precisa de permissão, ou
+          // navegador mais antigo), seleciona o texto sozinho — só falta Ctrl+C.
+          const area = document.getElementById('textoResumoVisivel');
+          if (area) { area.focus(); area.select(); mostrarToast('Não consegui copiar sozinho — o texto já tá selecionado, só apertar Ctrl+C.', 'erro'); }
+          else mostrarToast('Não consegui copiar automaticamente.', 'erro');
+        }
+      }
+
+      // O bloco de texto fica sempre visível e atualizado, desde o carregamento —
+      // não precisa esperar fechar o caixa pra ter algo pronto pra copiar.
+      document.getElementById('textoResumoVisivel').value = montarTextoResumoDia();
+      document.getElementById('btnCopiarTextoResumo').addEventListener('click', () => copiarResumoParaAreaTransferencia(document.getElementById('textoResumoVisivel').value));
+
+      document.getElementById('btnResumoWpp').addEventListener('click', () => {
+        window.open('https://wa.me/?text=' + encodeURIComponent(montarTextoResumoDia()), '_blank');
+      });
+
+      // ---------- Gerar imagem do resumo (mesmo padrão visual do comprovante de venda) ----------
+      function montarHtmlImagemResumo(diferenca, logoDataUrl){
+        // Emojis em \u{...} — mesmo motivo de sempre, à prova de corrupção de byte.
+        const E = {
+          loja: '\u{1F3EA}', dinheiro: '\u{1F4B5}', pix: '\u{26A1}', cartao: '\u{1F4B3}',
+          certo: '\u{2705}', azul: '\u{1F535}', vermelho: '\u{1F534}', graf: '\u{1F4C8}'
+        };
+        const linhasForma = [
+          { rotulo: 'Dinheiro', valor: porForma['Dinheiro'], cor: '#2fe1a8', icone: E.dinheiro },
+          { rotulo: 'PIX', valor: porForma['PIX'], cor: '#4c8dff', icone: E.pix },
+          { rotulo: 'Cartão de Débito', valor: porForma['Cartão de Débito'], cor: '#f5a623', icone: E.cartao },
+          { rotulo: 'Cartão de Crédito', valor: porForma['Cartão de Crédito'], cor: '#a970ff', icone: E.cartao }
+        ];
+        const statusInfo = diferenca === undefined || isNaN(diferenca) ? null
+          : diferenca === 0 ? { texto: E.certo + ' Caixa bateu certinho!', cor: '#2fe1a8' }
+          : diferenca > 0 ? { texto: E.azul + ' Sobrou ' + moeda(diferenca) + ' no caixa.', cor: '#4c8dff' }
+          : { texto: E.vermelho + ' Faltou ' + moeda(Math.abs(diferenca)) + ' no caixa.', cor: '#ff5c5c' };
+
+        // Barra de proporção — dá pra ver de relance qual forma de pagamento dominou o dia.
+        const somaFormas = linhasForma.reduce((s,f) => s + f.valor, 0) || 1;
+        const barraProporcao = linhasForma.filter(f => f.valor > 0).map(f =>
+          `<div style="width:${(f.valor/somaFormas*100).toFixed(1)}%; background:${f.cor};"></div>`
+        ).join('');
+
+        return `
+          <div style="width:480px; background:#eef0f3; font-family:'Segoe UI',Arial,sans-serif; color:#1a1a1a; padding:18px;">
+            <div style="background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.12);">
+
+              <div style="background:linear-gradient(135deg,#e2401c,#f5a623); padding:26px 28px 24px; display:flex; align-items:center; gap:14px;">
+                ${logoDataUrl
+                  ? `<img src="${logoDataUrl}" style="height:44px; width:auto; max-width:70px; object-fit:contain; flex-shrink:0;">`
+                  : `<div style="width:46px; height:46px; border-radius:50%; background:rgba(255,255,255,0.22); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0;">${E.loja}</div>`}
+                <div>
+                  <div style="font-size:17px; font-weight:800; color:#fff;">${nomeLoja(lojaId)}</div>
+                  <div style="font-size:11px; color:rgba(255,255,255,0.9); margin-top:2px; text-transform:uppercase; letter-spacing:1.2px;">${E.graf} Resumo do Dia</div>
+                </div>
+              </div>
+
+              <div style="padding:18px 28px 4px; font-size:12px; color:#999;">${new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })}</div>
+
+              <div style="padding:14px 28px 22px;">
+
+                <div style="background:linear-gradient(135deg,#fff4e8,#fff8f0); border-radius:14px; padding:16px 18px; margin-bottom:18px; text-align:center;">
+                  <div style="font-size:11px; color:#b5762a; text-transform:uppercase; letter-spacing:0.8px; font-weight:700;">Total vendido hoje</div>
+                  <div style="font-size:32px; font-weight:800; color:#e2401c; margin-top:4px;">${moeda(totalVendidoHoje)}</div>
+                </div>
+
+                <div style="display:flex; height:10px; border-radius:6px; overflow:hidden; margin-bottom:22px; background:#f0f0f0;">${barraProporcao}</div>
+
+                ${linhasForma.map(f => `
+                  <div style="display:flex; align-items:center; justify-content:space-between; padding:11px 0; border-bottom:1px solid #f5f5f5;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                      <div style="width:38px; height:38px; border-radius:10px; background:${f.cor}22; display:flex; align-items:center; justify-content:center; font-size:17px;">${f.icone}</div>
+                      <span style="font-size:14px; color:#333; font-weight:500;">${f.rotulo}</span>
+                    </div>
+                    <b style="font-size:15px; color:#222;">${moeda(f.valor)}</b>
+                  </div>`).join('')}
+
+                <div style="display:flex; justify-content:space-between; padding:14px 0 0; margin-top:10px; font-size:12.5px; color:#888;">
+                  <span>Abertura de caixa</span><span style="font-weight:700; color:#555;">${moeda(caixaHoje.VALOR_ABERTURA)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding:6px 0 0; font-size:12.5px; color:#888;">
+                  <span>Esperado em caixa</span><span style="font-weight:700; color:#555;">${moeda(esperadoEmCaixa)}</span>
+                </div>
+
+                ${statusInfo ? `<div style="text-align:center; margin-top:18px; padding:12px; border-radius:10px; background:${statusInfo.cor}18; color:${statusInfo.cor}; font-weight:700; font-size:13.5px;">${statusInfo.texto}</div>` : ''}
+              </div>
+
+              <div style="text-align:center; padding:14px 28px 20px; border-top:1px solid #f2f2f2; font-size:10.5px; color:#bbb;">Gerado pelo BSTYLE ERP — ${new Date().toLocaleString('pt-BR')}</div>
+            </div>
+          </div>`;
+      }
+
+      async function gerarImagemResumo(diferenca){
+        mostrarToast('Gerando imagem…');
+        await carregarHtml2Canvas();
+        if (!window.html2canvas) { mostrarToast('Não consegui carregar a biblioteca de imagem (sem internet?).', 'erro'); return; }
+
+        let logoDataUrl = null;
+        try { const logo = await carregarLogoComoDataUrl(); logoDataUrl = logo ? logo.url : null; } catch (e) { logoDataUrl = null; }
+
+        const holder = document.createElement('div');
+        holder.style.cssText = 'position:fixed; left:-9999px; top:0; z-index:-1;';
+        holder.innerHTML = montarHtmlImagemResumo(diferenca, logoDataUrl);
+        document.body.appendChild(holder);
+
+        const imgLogo = holder.querySelector('img');
+        if (imgLogo && !imgLogo.complete) {
+          await new Promise(res => { imgLogo.onload = res; imgLogo.onerror = res; setTimeout(res, 1500); });
+        }
+
+        let canvas;
+        try {
+          canvas = await window.html2canvas(holder.firstElementChild, { scale: 2, backgroundColor: '#ffffff', useCORS: true, allowTaint: false, logging: false });
+        } finally {
+          document.body.removeChild(holder);
+        }
+
+        canvas.toBlob(async (blob) => {
+          if (!blob) { mostrarToast('Não consegui gerar a imagem.', 'erro'); return; }
+          // Tenta copiar a imagem direto pra área de transferência — assim já dá
+          // pra colar (Ctrl+V) direto no WhatsApp Web ou onde quiser, sem precisar
+          // salvar arquivo nenhum. Se o navegador não deixar, abre a imagem numa
+          // aba nova, pra copiar manualmente (clique direito → copiar imagem).
+          try {
+            if (navigator.clipboard && window.ClipboardItem) {
+              await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+              mostrarToast('Imagem copiada — já pode colar (Ctrl+V) onde quiser.');
+              return;
+            }
+          } catch (e) { /* segue pro alternativo abaixo */ }
+          const url = URL.createObjectURL(blob);
+          window.open(url, '_blank');
+          mostrarToast('Não consegui copiar sozinho — a imagem abriu numa aba nova, clica com o botão direito nela e escolhe "Copiar imagem".');
+        }, 'image/png');
+      }
+
+      document.getElementById('btnResumoImagem').addEventListener('click', () => gerarImagemResumo());
+
+      document.getElementById('btnFecharCaixa').addEventListener('click', async () => {
+        const contado = Number(document.getElementById('valorContado').value);
+        if (isNaN(contado)){ mostrarToast('Informe o valor contado.', 'erro'); return; }
+        const diferenca = contado - esperadoEmCaixa;
+        try {
+          if (!(await checarPermissao('CAIXA','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+          await dbUpdate('CAIXA', idDia, { STATUS: 'Fechado', VALOR_ESPERADO: esperadoEmCaixa, VALOR_CONTADO: contado, DIFERENCA: diferenca, USUARIO_FECHAMENTO: usuarioAtual.ID, DATA_FECHAMENTO: new Date().toISOString() });
+          const cor = diferenca === 0 ? 'var(--mint)' : (diferenca > 0 ? 'var(--blue)' : 'var(--red)');
+          const textoResultado = diferenca === 0 ? 'Caixa bateu certinho! \u{1F389}' : (diferenca > 0 ? `Sobrou ${moeda(diferenca)} no caixa.` : `Faltou ${moeda(Math.abs(diferenca))} no caixa.`);
+          const textoResumo = montarTextoResumoDia(diferenca);
+          document.getElementById('textoResumoVisivel').value = textoResumo;
+
+          setHTML('resultadoFechamento', `<b style="color:${cor};">${textoResultado}</b><p style="color:var(--text-tertiary); font-size:11.5px; margin-top:8px;" id="statusEnvioTelegram">Enviando resumo pro Telegram…</p><div style="display:flex; gap:8px; margin-top:6px;"><button class="btn" id="btnCopiarResumo">\u{1F4CB} Copiar resumo do dia</button><button class="btn" id="btnImagemResumoFinal">\u{1F4F8} Gerar imagem</button></div>`);
+          document.getElementById('btnCopiarResumo').addEventListener('click', () => copiarResumoParaAreaTransferencia(textoResumo));
+          document.getElementById('btnImagemResumoFinal').addEventListener('click', () => gerarImagemResumo(diferenca));
+          mostrarToast('Caixa fechado.');
+
+          // Manda pro Telegram sozinho, se já tiver configurado em Configurações — se não
+          // tiver, ou der erro, o botão de copiar acima já resolve na mesma hora.
+          try {
+            const cfgTelegram = await dbGetById('CONFIG', 'telegram_resumo_caixa');
+            const statusEl = document.getElementById('statusEnvioTelegram');
+            if (cfgTelegram && cfgTelegram.BOT_TOKEN && cfgTelegram.CHAT_ID) {
+              const resultado = await window.enviarMensagemTelegram(cfgTelegram.BOT_TOKEN, cfgTelegram.CHAT_ID, textoResumo);
+              if (statusEl) { statusEl.textContent = resultado.ok ? '\u{2713} Resumo enviado pro Telegram.' : 'Não consegui enviar pro Telegram — usa o botão de copiar acima.'; statusEl.style.color = resultado.ok ? 'var(--mint)' : 'var(--amber)'; }
+            } else if (statusEl) {
+              statusEl.textContent = 'Telegram não configurado ainda (Configurações → Telegram) — usa o botão de copiar acima.';
+              statusEl.style.color = 'var(--text-tertiary)';
+            }
+          } catch (e) {
+            const statusEl = document.getElementById('statusEnvioTelegram');
+            if (statusEl) { statusEl.textContent = 'Não consegui enviar pro Telegram — usa o botão de copiar acima.'; statusEl.style.color = 'var(--amber)'; }
+          }
+        } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+      });
+    } catch (e) { el.textContent = 'Erro: ' + e.message; }
+  }
+
+  carregarCaixa();
+})();
+</script>
