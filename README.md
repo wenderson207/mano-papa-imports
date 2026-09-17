@@ -1,4 +1,4 @@
-# BStyle ERP — GitHub Pages + Firebase
+# Mano Papa ERP — GitHub Pages + Firebase
 
 Sistema reconstruído sem Google Apps Script: o código (HTML/CSS/JS) mora 100% neste repositório GitHub, publicado via GitHub Pages. Login e dados ficam no Firebase (Authentication + Firestore).
 
