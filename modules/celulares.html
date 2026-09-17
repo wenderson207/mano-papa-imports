@@ -172,6 +172,7 @@
   </div>
 
   <div style="margin-bottom:14px; display:flex; gap:10px; flex-wrap:wrap;">
+    <input id="buscaTela" placeholder="🔍 Consultar por marca ou modelo…" style="width:100%; max-width:280px; background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;">
     <select id="filtroMarcaTela" style="background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;"><option value="">Todas as marcas</option></select>
     <select id="filtroModeloTela" style="background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;"><option value="">Todos os modelos</option></select>
     <select id="filtroDisponibilidadeTela" style="background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;">
@@ -198,9 +199,45 @@
   </table>
 </div>
 
+<div class="modal-overlay" id="modalNovaTela">
+  <div class="modal-box" style="max-width:640px;">
+    <div class="modal-head"><h3 style="font-family:var(--font-display); margin:0;">Nova tela (com todas as variações)</h3><button class="modal-close" id="fecharModalNovaTela">✕</button></div>
+    <div class="modal-body">
+      <div class="frow2">
+        <div class="ffield"><label>Marca do celular *</label>
+          <select id="ftnMarca">
+            <option value="Motorola">Motorola</option><option value="Apple">Apple</option>
+            <option value="Samsung">Samsung</option><option value="Realme">Realme</option>
+            <option value="Outro">Outro…</option>
+          </select>
+        </div>
+        <div class="ffield"><label>Modelo da tela *</label><input id="ftnModelo" placeholder="Ex.: A01, G22, 11…"></div>
+      </div>
+      <div class="ffield" id="wrapMarcaOutraNovaTela" style="display:none;"><label>Qual marca?</label><input id="ftnMarcaOutra" placeholder="Digite a marca"></div>
+      <div class="ffield">
+        <label>Modelos compatíveis <span style="color:var(--text-tertiary); font-weight:400;">(essa mesma tela serve em quais outros aparelhos?)</span></label>
+        <div style="display:flex; gap:8px;">
+          <input id="ftnCompativelInput" placeholder="Ex.: G20" style="flex:1;">
+          <button type="button" class="btn" id="btnAdicionarCompativelNova" style="flex-shrink:0;">+ Adicionar</button>
+        </div>
+        <div id="listaCompativeisNovaTela" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;"></div>
+      </div>
+
+      <div style="border-top:1px solid var(--hairline); margin:18px 0 14px; padding-top:14px;">
+        <label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:10px;">
+          Variações que você tem dessa tela <span style="color:var(--text-tertiary); font-weight:400;">(ex.: cadastrou com aro, mas também tem sem aro — adiciona quantas precisar)</span>
+        </label>
+        <div id="linhasVariacoesTela"></div>
+        <button type="button" class="btn" id="btnAdicionarVariacaoTela" style="margin-top:6px;">+ Adicionar variação</button>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn" id="btnCancelarNovaTela">Cancelar</button><button class="btn btn-primary" id="btnSalvarNovaTela">Salvar tudo</button></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalTela">
   <div class="modal-box">
-    <div class="modal-head"><h3 id="modalTituloTela" style="font-family:var(--font-display); margin:0;">Nova tela</h3><button class="modal-close" id="fecharModalTela">✕</button></div>
+    <div class="modal-head"><h3 style="font-family:var(--font-display); margin:0;">Editar tela</h3><button class="modal-close" id="fecharModalTela">✕</button></div>
     <div class="modal-body">
       <input type="hidden" id="ftId">
       <div class="frow2">
@@ -221,7 +258,7 @@
         <div class="ffield"><label>Qualidade *</label>
           <select id="ftQualidade">
             <option value="INCELL">Incell</option><option value="ORIGINAL_CHINA">Original China</option>
-            <option value="OLED">Oled</option><option value="SOFT_OLED">Soft Oled</option><option value="OUTRO">Outro…</option>
+            <option value="OLED">Oled</option><option value="SOFT_OLED">Soft Oled</option><option value="VIVID">Vivid</option><option value="OUTRO">Outro…</option>
           </select>
         </div>
       </div>
@@ -263,6 +300,22 @@
       <div class="ffield"><label>Motivo <span id="fbMotivoObrigatorio" style="color:var(--red);">*</span></label><textarea id="fbMotivo" style="width:100%; min-height:60px; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; font-family:inherit; box-sizing:border-box;" placeholder="Ex.: usada na troca de tela da OS X, ou explica pra onde foi se não tiver OS"></textarea></div>
     </div>
     <div class="modal-foot"><button class="btn" id="btnCancelarBaixaTela">Cancelar</button><button class="btn btn-primary" id="btnConfirmarBaixaTela">Confirmar baixa</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalEscolherLista">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-head"><h3 style="font-family:var(--font-display); margin:0;">Adicionar a qual lista?</h3><button class="modal-close" id="fecharModalEscolherLista">✕</button></div>
+    <div class="modal-body">
+      <div id="opcoesListasExistentes" style="display:flex; flex-direction:column; gap:8px; max-height:240px; overflow-y:auto; margin-bottom:16px;"></div>
+      <div style="border-top:1px solid var(--hairline); padding-top:14px;">
+        <label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">Ou cria uma lista nova</label>
+        <div style="display:flex; gap:8px;">
+          <input id="nomeNovaListaSeletor" placeholder="Nome da lista…" style="flex:1; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:13px;">
+          <button class="btn btn-primary" id="btnCriarEUsarLista">Criar e usar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -767,7 +820,7 @@
   };
 
   // ==================== ABA: TELAS ====================
-  const QUALIDADE_LABEL = { INCELL:'Incell', ORIGINAL_CHINA:'Original China', OLED:'Oled', SOFT_OLED:'Soft Oled' };
+  const QUALIDADE_LABEL = { INCELL:'Incell', ORIGINAL_CHINA:'Original China', OLED:'Oled', SOFT_OLED:'Soft Oled', VIVID:'Vivid' };
   function labelQualidadeTela(t){ return t.QUALIDADE === 'OUTRO' ? (t.QUALIDADE_OUTRA||'Outro') : (QUALIDADE_LABEL[t.QUALIDADE] || t.QUALIDADE); }
   function labelTipoAro(v){ return v === 'COM_ARO' ? 'Com Aro' : 'Sem Aro'; }
 
@@ -813,6 +866,7 @@
   }
 
   function telasFiltradas(){
+    const busca = document.getElementById('buscaTela').value.trim().toLowerCase();
     const marca = document.getElementById('filtroMarcaTela').value;
     const modelo = document.getElementById('filtroModeloTela').value;
     const disponibilidade = document.getElementById('filtroDisponibilidadeTela').value;
@@ -820,9 +874,14 @@
       if (marca && t.MARCA !== marca) return false;
       if (modelo && !telaAtendeModelo(t, modelo)) return false;
       if (disponibilidade && situacaoTela(t).chave !== disponibilidade) return false;
+      if (busca) {
+        const alvo = [t.MARCA, t.MODELO, ...(t.MODELOS_COMPATIVEIS||[])].join(' ').toLowerCase();
+        if (!alvo.includes(busca)) return false;
+      }
       return true;
     });
   }
+  document.getElementById('buscaTela').addEventListener('input', renderLinhasTelas);
 
   function renderLinhasTelas(){
     const lista = telasFiltradas();
@@ -835,6 +894,7 @@
         <td><span style="color:${sit.cor}; font-weight:600; font-size:12px;">${sit.texto}</span></td>
         <td style="display:flex; gap:6px;">
           <button class="btn" style="padding:6px 10px; font-size:11.5px; color:var(--mint);" ${Number(t.QUANTIDADE)<=0?'disabled':''} onclick="window.__abrirBaixaTela('${t.ID}')">Dar baixa</button>
+          <button class="btn" style="padding:6px 10px; font-size:11.5px; color:var(--blue);" onclick="window.__enviarTelaParaListaCompras('${t.ID}')">📝 Lista</button>
           <button class="btn" style="padding:6px 10px; font-size:11.5px;" onclick="window.__editarTela('${t.ID}')">Editar</button>
           <button class="btn" style="padding:6px 10px; font-size:11.5px; color:var(--red);" onclick="window.__excluirTela('${t.ID}')">Excluir</button>
         </td>
@@ -895,7 +955,7 @@
   }
   function nomeUsuarioTela(id){ const u = (usuariosCel||[]).find(x=>x.ID===id); return u?u.NOME:'—'; }
 
-  // ---------- Modal: nova/editar tela ----------
+  // ---------- Modal: EDITAR tela (um item só) ----------
   const modalTela = document.getElementById('modalTela');
   let telaEmEdicao = null;
   let compativeisEmEdicao = [];
@@ -919,18 +979,6 @@
   document.getElementById('btnAdicionarCompativel').addEventListener('click', adicionarCompativelTela);
   document.getElementById('ftCompativelInput').addEventListener('keydown', (e) => { if (e.key === 'Enter'){ e.preventDefault(); adicionarCompativelTela(); } });
 
-  document.getElementById('btnNovaTela').addEventListener('click', () => {
-    telaEmEdicao = null;
-    document.getElementById('modalTituloTela').textContent = 'Nova tela';
-    document.getElementById('ftId').value = '';
-    document.getElementById('ftMarca').value = 'Motorola'; document.getElementById('ftMarcaOutra').value = ''; document.getElementById('wrapMarcaOutraTela').style.display = 'none';
-    document.getElementById('ftModelo').value = '';
-    document.getElementById('ftTipoAro').value = 'COM_ARO'; document.getElementById('ftQualidade').value = 'INCELL';
-    document.getElementById('ftQualidadeOutra').value = ''; document.getElementById('wrapQualidadeOutraTela').style.display = 'none';
-    document.getElementById('ftValorCompra').value = ''; document.getElementById('ftValorVenda').value = ''; document.getElementById('ftQuantidade').value = '1';
-    compativeisEmEdicao = []; document.getElementById('ftCompativelInput').value = ''; renderListaCompativeisTela();
-    modalTela.classList.add('open');
-  });
   document.getElementById('fecharModalTela').addEventListener('click', () => modalTela.classList.remove('open'));
   document.getElementById('btnCancelarTela').addEventListener('click', () => modalTela.classList.remove('open'));
   document.getElementById('ftQualidade').addEventListener('change', (e) => {
@@ -943,7 +991,6 @@
   window.__editarTela = (id) => {
     telaEmEdicao = telasEstoque.find(t => t.ID === id);
     if (!telaEmEdicao) return;
-    document.getElementById('modalTituloTela').textContent = 'Editar tela';
     document.getElementById('ftId').value = telaEmEdicao.ID;
     const marcasFixas = ['Motorola','Apple','Samsung','Realme'];
     if (marcasFixas.includes(telaEmEdicao.MARCA)) {
@@ -968,6 +1015,7 @@
   };
 
   document.getElementById('btnSalvarTela').addEventListener('click', async () => {
+    if (!telaEmEdicao) return;
     const marcaSelecionada = document.getElementById('ftMarca').value;
     const marca = marcaSelecionada === 'Outro' ? document.getElementById('ftMarcaOutra').value.trim() : marcaSelecionada;
     const modelo = document.getElementById('ftModelo').value.trim();
@@ -989,13 +1037,8 @@
     };
 
     try {
-      if (telaEmEdicao) {
-        if (!(await checarPermissao('CELULARES','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
-        await dbUpdate('TELAS_ESTOQUE', telaEmEdicao.ID, dados);
-      } else {
-        if (!(await checarPermissao('CELULARES','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
-        await dbInsert('TELAS_ESTOQUE', Object.assign({ DATA_CADASTRO: new Date().toISOString(), USUARIO_ID: usuarioAtual.ID, EMPRESA_ID: window.lojaAtivaId||'' }, dados));
-      }
+      if (!(await checarPermissao('CELULARES','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      await dbUpdate('TELAS_ESTOQUE', telaEmEdicao.ID, dados);
       mostrarToast('Tela salva.');
       modalTela.classList.remove('open');
       carregarTelas();
@@ -1011,6 +1054,134 @@
       carregarTelas();
     } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
   };
+
+  // ---------- Modal: NOVA TELA (cadastra várias variações de uma vez) ----------
+  const modalNovaTela = document.getElementById('modalNovaTela');
+  let compativeisNovaTela = [];
+  let variacoesNovaTela = [];
+  let contadorVariacaoTela = 0;
+
+  function renderListaCompativeisNovaTela(){
+    setHTML('listaCompativeisNovaTela', compativeisNovaTela.length ? compativeisNovaTela.map((m,i) => `
+      <span class="chip-compativel">${m}<button type="button" onclick="window.__removerCompativelNovaTela(${i})">✕</button></span>
+    `).join('') : '<span style="color:var(--text-tertiary); font-size:11.5px;">Nenhum ainda — só o modelo principal.</span>');
+  }
+  window.__removerCompativelNovaTela = (i) => { compativeisNovaTela.splice(i,1); renderListaCompativeisNovaTela(); };
+
+  function adicionarCompativelNovaTela(){
+    const valor = document.getElementById('ftnCompativelInput').value.trim();
+    if (!valor) return;
+    if (compativeisNovaTela.some(m => m.toLowerCase() === valor.toLowerCase())){ mostrarToast('Esse modelo já está na lista.', 'erro'); return; }
+    compativeisNovaTela.push(valor);
+    document.getElementById('ftnCompativelInput').value = '';
+    renderListaCompativeisNovaTela();
+    document.getElementById('ftnCompativelInput').focus();
+  }
+  document.getElementById('btnAdicionarCompativelNova').addEventListener('click', adicionarCompativelNovaTela);
+  document.getElementById('ftnCompativelInput').addEventListener('keydown', (e) => { if (e.key === 'Enter'){ e.preventDefault(); adicionarCompativelNovaTela(); } });
+
+  document.getElementById('ftnMarca').addEventListener('change', (e) => {
+    document.getElementById('wrapMarcaOutraNovaTela').style.display = e.target.value === 'Outro' ? 'block' : 'none';
+  });
+
+  function novaLinhaVariacaoTela(){
+    return { id: contadorVariacaoTela++, tipo:'COM_ARO', qualidade:'INCELL', qualidadeOutra:'', valorCompra:'', valorVenda:'', quantidade:1 };
+  }
+
+  function renderVariacoesTela(){
+    setHTML('linhasVariacoesTela', variacoesNovaTela.map((v, idx) => `
+      <div style="background:var(--bg-elevated); border:1px solid var(--hairline); border-radius:10px; padding:12px; margin-bottom:10px;">
+        <div class="frow2" style="margin-bottom:${v.qualidade==='OUTRO'?'10px':'0'};">
+          <div class="ffield" style="margin:0;"><label>Tipo</label>
+            <select data-campo="tipo" data-idx="${idx}">
+              <option value="COM_ARO" ${v.tipo==='COM_ARO'?'selected':''}>Com Aro</option>
+              <option value="SEM_ARO" ${v.tipo==='SEM_ARO'?'selected':''}>Sem Aro</option>
+            </select>
+          </div>
+          <div class="ffield" style="margin:0;"><label>Qualidade</label>
+            <select data-campo="qualidade" data-idx="${idx}">
+              <option value="INCELL" ${v.qualidade==='INCELL'?'selected':''}>Incell</option>
+              <option value="ORIGINAL_CHINA" ${v.qualidade==='ORIGINAL_CHINA'?'selected':''}>Original China</option>
+              <option value="OLED" ${v.qualidade==='OLED'?'selected':''}>Oled</option>
+              <option value="SOFT_OLED" ${v.qualidade==='SOFT_OLED'?'selected':''}>Soft Oled</option>
+              <option value="VIVID" ${v.qualidade==='VIVID'?'selected':''}>Vivid</option>
+              <option value="OUTRO" ${v.qualidade==='OUTRO'?'selected':''}>Outro…</option>
+            </select>
+          </div>
+        </div>
+        ${v.qualidade==='OUTRO' ? `<div class="ffield" style="margin:0 0 10px;"><label>Qual qualidade?</label><input data-campo="qualidadeOutra" data-idx="${idx}" value="${v.qualidadeOutra}"></div>` : ''}
+        <div class="frow3" style="align-items:end;">
+          <div class="ffield" style="margin:0;"><label>Compra (R$)</label><input type="number" step="0.01" data-campo="valorCompra" data-idx="${idx}" value="${v.valorCompra}"></div>
+          <div class="ffield" style="margin:0;"><label>Venda (R$)</label><input type="number" step="0.01" data-campo="valorVenda" data-idx="${idx}" value="${v.valorVenda}"></div>
+          <div style="display:flex; gap:6px; align-items:end;">
+            <div class="ffield" style="margin:0; flex:1;"><label>Qtd.</label><input type="number" min="1" data-campo="quantidade" data-idx="${idx}" value="${v.quantidade}"></div>
+            ${variacoesNovaTela.length>1 ? `<button type="button" data-remover-variacao="${idx}" title="Remover essa variação" style="background:none; border:1px solid var(--red); color:var(--red); border-radius:8px; padding:9px 10px; cursor:pointer; flex-shrink:0;">🗑️</button>` : ''}
+          </div>
+        </div>
+      </div>
+    `).join(''));
+
+    document.querySelectorAll('#linhasVariacoesTela [data-campo]').forEach(el => {
+      el.addEventListener('input', (e) => {
+        const idx = Number(e.target.dataset.idx);
+        const campo = e.target.dataset.campo;
+        variacoesNovaTela[idx][campo] = e.target.value;
+        if (campo === 'qualidade') renderVariacoesTela();
+      });
+    });
+    document.querySelectorAll('#linhasVariacoesTela [data-remover-variacao]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        variacoesNovaTela.splice(Number(e.target.dataset.removerVariacao), 1);
+        renderVariacoesTela();
+      });
+    });
+  }
+
+  document.getElementById('btnAdicionarVariacaoTela').addEventListener('click', () => {
+    variacoesNovaTela.push(novaLinhaVariacaoTela());
+    renderVariacoesTela();
+  });
+
+  document.getElementById('btnNovaTela').addEventListener('click', () => {
+    document.getElementById('ftnMarca').value = 'Motorola'; document.getElementById('ftnMarcaOutra').value = ''; document.getElementById('wrapMarcaOutraNovaTela').style.display = 'none';
+    document.getElementById('ftnModelo').value = '';
+    compativeisNovaTela = []; document.getElementById('ftnCompativelInput').value = ''; renderListaCompativeisNovaTela();
+    variacoesNovaTela = [novaLinhaVariacaoTela()];
+    renderVariacoesTela();
+    modalNovaTela.classList.add('open');
+  });
+  document.getElementById('fecharModalNovaTela').addEventListener('click', () => modalNovaTela.classList.remove('open'));
+  document.getElementById('btnCancelarNovaTela').addEventListener('click', () => modalNovaTela.classList.remove('open'));
+
+  document.getElementById('btnSalvarNovaTela').addEventListener('click', async () => {
+    const marcaSelecionada = document.getElementById('ftnMarca').value;
+    const marca = marcaSelecionada === 'Outro' ? document.getElementById('ftnMarcaOutra').value.trim() : marcaSelecionada;
+    const modelo = document.getElementById('ftnModelo').value.trim();
+    if (marcaSelecionada === 'Outro' && !marca){ mostrarToast('Digite qual é a marca.', 'erro'); return; }
+    if (!marca || !modelo){ mostrarToast('Marca e modelo são obrigatórios.', 'erro'); return; }
+
+    for (const v of variacoesNovaTela) {
+      if (!Number(v.valorCompra)){ mostrarToast('Preencha o valor de compra em todas as variações.', 'erro'); return; }
+      if (!Number(v.valorVenda)){ mostrarToast('Preencha o valor de venda em todas as variações.', 'erro'); return; }
+      if (!Number(v.quantidade)){ mostrarToast('Preencha a quantidade em todas as variações.', 'erro'); return; }
+      if (v.qualidade === 'OUTRO' && !String(v.qualidadeOutra||'').trim()){ mostrarToast('Descreve a qualidade nas variações marcadas como "Outro".', 'erro'); return; }
+    }
+
+    try {
+      if (!(await checarPermissao('CELULARES','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      for (const v of variacoesNovaTela) {
+        await dbInsert('TELAS_ESTOQUE', {
+          MARCA: marca, MODELO: modelo, MODELOS_COMPATIVEIS: compativeisNovaTela,
+          TIPO_ARO: v.tipo, QUALIDADE: v.qualidade, QUALIDADE_OUTRA: v.qualidade==='OUTRO' ? String(v.qualidadeOutra).trim() : '',
+          VALOR_COMPRA: Number(v.valorCompra), VALOR_VENDA: Number(v.valorVenda), QUANTIDADE: Number(v.quantidade),
+          DATA_CADASTRO: new Date().toISOString(), USUARIO_ID: usuarioAtual.ID, EMPRESA_ID: window.lojaAtivaId||''
+        });
+      }
+      mostrarToast(variacoesNovaTela.length > 1 ? variacoesNovaTela.length + ' variações salvas.' : 'Tela salva.');
+      modalNovaTela.classList.remove('open');
+      carregarTelas();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
 
   // ---------- Modal: dar baixa ----------
   const modalBaixaTela = document.getElementById('modalBaixaTela');
@@ -1083,6 +1254,52 @@
       carregarTelas();
     } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
   });
+
+  // ---------- Seletor de lista (usado ao mandar uma tela pra Pedidos) ----------
+  let _callbackListaEscolhida = null;
+  async function abrirSeletorDeLista(callback){
+    _callbackListaEscolhida = callback;
+    let listas = [];
+    try { listas = (await dbGetAll('LISTAS_COMPRAS')).sort((a,b) => new Date(b.DATA_CRIACAO) - new Date(a.DATA_CRIACAO)); }
+    catch (e) { mostrarToast('Erro ao buscar as listas: ' + e.message, 'erro'); return; }
+    setHTML('opcoesListasExistentes', listas.length ? listas.map(l => `
+      <button type="button" class="btn" style="justify-content:flex-start; text-align:left;" onclick="window.__escolherListaExistente('${l.ID}','${l.NOME.replace(/'/g,"\\'")}')">${l.NOME}</button>
+    `).join('') : '<p style="color:var(--text-tertiary); font-size:12.5px; margin:0;">Nenhuma lista criada ainda — cria uma nova abaixo.</p>');
+    document.getElementById('nomeNovaListaSeletor').value = '';
+    document.getElementById('modalEscolherLista').classList.add('open');
+  }
+  window.__escolherListaExistente = (id, nome) => {
+    document.getElementById('modalEscolherLista').classList.remove('open');
+    if (_callbackListaEscolhida) _callbackListaEscolhida({ ID: id, NOME: nome });
+  };
+  document.getElementById('fecharModalEscolherLista').addEventListener('click', () => document.getElementById('modalEscolherLista').classList.remove('open'));
+  document.getElementById('btnCriarEUsarLista').addEventListener('click', async () => {
+    const nome = document.getElementById('nomeNovaListaSeletor').value.trim();
+    if (!nome) { mostrarToast('Dá um nome pra lista nova.', 'erro'); return; }
+    try {
+      if (!(await checarPermissao('PEDIDOS','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      const nova = await dbInsert('LISTAS_COMPRAS', { NOME: nome, DATA_CRIACAO: new Date().toISOString(), USUARIO_ID: usuarioAtual.ID });
+      document.getElementById('modalEscolherLista').classList.remove('open');
+      if (_callbackListaEscolhida) _callbackListaEscolhida(nova);
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  });
+
+  window.__enviarTelaParaListaCompras = (telaId) => {
+    const tela = telasEstoque.find(t => t.ID === telaId);
+    if (!tela) return;
+    abrirSeletorDeLista(async (lista) => {
+      try {
+        if (!(await checarPermissao('PEDIDOS','CADASTRAR'))){ mostrarToast('Sem permissão pra usar a lista de Pedidos.', 'erro'); return; }
+        await dbInsert('LISTA_COMPRAS', {
+          LISTA_ID: lista.ID, DESCRICAO: 'Tela ' + tela.MARCA + ' ' + tela.MODELO, QUANTIDADE: 1,
+          CATEGORIA: 'Telas', MODELO: tela.MODELO, COR: '',
+          OBSERVACAO: labelTipoAro(tela.TIPO_ARO) + ', ' + labelQualidadeTela(tela) + ' — adicionado da aba Celulares (Telas)',
+          DATA_ADICIONADO: new Date().toISOString(), USUARIO_ID: usuarioAtual.ID
+        });
+        mostrarToast('Tela ' + tela.MARCA + ' ' + tela.MODELO + ' adicionada à lista "' + lista.NOME + '" (aba Pedidos).');
+      } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+    });
+  };
 
   await carregar();
   renderCarrinhoVenda();
