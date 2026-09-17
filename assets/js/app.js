@@ -13,7 +13,8 @@ const NOMES_MODULO = {
   DASHBOARD:'Dashboard', CAIXA:'Caixa Diário', AGENDA:'Agenda', CLIENTES:'Clientes', PRODUTOS:'Produtos', FORNECEDORES:'Fornecedores',
   FUNCIONARIOS:'Funcionários', EMPRESAS:'Empresas', VENDAS:'Vendas (PDV)', ORCAMENTOS:'Orçamentos',
   COMPRAS:'Compras', ESTOQUE:'Estoque', ASSISTENCIA:'Assistência técnica', GARANTIAS:'Garantias',
-  FINANCEIRO:'Financeiro', RELATORIOS:'Relatórios', CONFIGURACOES:'Configurações', CELULARES:'Celulares', DIVERGENCIAS_ESTOQUE:'Divergências de Estoque', CONTROLE_PONTO:'Controle de Ponto', PEDIDOS:'Pedidos'
+  FINANCEIRO:'Financeiro', RELATORIOS:'Relatórios', CONFIGURACOES:'Configurações', CELULARES:'Celulares', DIVERGENCIAS_ESTOQUE:'Divergências de Estoque', CONTROLE_PONTO:'Controle de Ponto', PEDIDOS:'Pedidos',
+  AJUDA:'Ajuda e Suporte'
 };
 
 // ---------- Toast global ----------
@@ -215,7 +216,7 @@ async function filtrarMenuPorPermissao(){
   const permitidos = usuarioAtual.MODULOS_PERMITIDOS || [];
   document.querySelectorAll('.menu-item').forEach(item => {
     const modulo = item.getAttribute('data-modulo');
-    item.style.display = (souAdmin || permitidos.includes(modulo)) ? '' : 'none';
+    item.style.display = (modulo === 'AJUDA' || souAdmin || permitidos.includes(modulo)) ? '' : 'none';
   });
 }
 
@@ -377,8 +378,8 @@ window.desenharCabecalhoLoja = async function(doc, empresasList){
   }
   if (doc.getTextWidth(nomeMarca) > larguraDisponivelMarca) {
     // Mesmo no tamanho mínimo não coube numa linha — quebra em duas, garantido que não invade a coluna das lojas.
-    doc.text('Mano Papa -', xMarca, 16);
-    doc.text(' Imports', xMarca, 21);
+    doc.text('Mano Papa', xMarca, 16);
+    doc.text(' - Imports', xMarca, 21);
     doc.setFontSize(8.5); doc.setFont(undefined, 'normal'); doc.setTextColor(90);
     doc.text((lojas[0] && lojas[0].EMAIL) || (lojas[0] && lojas[0].INSTAGRAM) || '', xMarca, 27);
   } else {
