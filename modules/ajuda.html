@@ -98,14 +98,14 @@
   document.getElementById('buscaAjuda').addEventListener('input', (e) => renderAjuda(e.target.value));
 
   document.getElementById('btnFalarSuporte').addEventListener('click', async () => {
-    let numero = '';
+    const NUMERO_PADRAO = '5511983223602'; // garante um número de contato mesmo sem nada configurado em Configurações
+    let numero = NUMERO_PADRAO;
     try {
       const cfg = await dbGetById('CONFIG', 'suporte_whatsapp');
-      numero = cfg ? cfg.NUMERO : '';
-    } catch (e) { numero = ''; }
-    const texto = encodeURIComponent('Oi! Preciso de ajuda com o sistema Mano Papa ERP.');
-    if (numero) window.open('https://wa.me/' + numero.replace(/\D/g,'') + '?text=' + texto, '_blank');
-    else window.open('https://wa.me/?text=' + texto, '_blank');
+      if (cfg && cfg.NUMERO) numero = cfg.NUMERO;
+    } catch (e) { /* mantém o padrão se der erro ao buscar */ }
+    const texto = encodeURIComponent('Oi! Preciso de ajuda com o sistema BSTYLE ERP.');
+    window.open('https://wa.me/' + numero.replace(/\D/g,'') + '?text=' + texto, '_blank');
   });
 
   renderAjuda('');
