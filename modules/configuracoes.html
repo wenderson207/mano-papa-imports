@@ -6,6 +6,8 @@
   .tab-panel.active{ display:block; }
   .perm-table th, .perm-table td{ text-align:center; }
   .perm-table td:first-child, .perm-table th:first-child{ text-align:left; }
+  .chip-chatid{ display:inline-flex; align-items:center; gap:6px; background:rgba(76,141,255,0.12); color:var(--blue); border:1px solid var(--blue); border-radius:20px; padding:4px 6px 4px 12px; font-size:12px; font-family:var(--font-mono); }
+  .chip-chatid button{ background:none; border:none; color:var(--blue); cursor:pointer; font-size:13px; padding:0 4px; }
 </style>
 
 <div class="toolbar"><div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Configurações</h1></div></div>
@@ -69,15 +71,19 @@
       <ol style="margin:10px 0 0; padding-left:18px; line-height:1.8;">
         <li>No Telegram, procura por <b>@BotFather</b> e manda <code>/newbot</code> — segue as perguntas dele (nome e um usuário terminando em "bot")</li>
         <li>No final, ele te dá um <b>Token</b> tipo <code>123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ</code> — copia e cola no campo abaixo</li>
-        <li>Procura por <b>@userinfobot</b>, manda qualquer mensagem, e ele te devolve seu <b>Chat ID</b> (um número, tipo <code>987654321</code>) — copia e cola no campo abaixo</li>
-        <li>Importante: manda uma mensagem qualquer pro seu bot novo primeiro (procura ele pelo usuário que você escolheu) — sem isso, o Telegram não deixa ele te mandar mensagem ainda</li>
+        <li>Procura por <b>@userinfobot</b>, manda qualquer mensagem, e ele te devolve seu <b>Chat ID</b> (um número, tipo <code>987654321</code>) — copia e cola na lista abaixo. Repete isso pra cada pessoa que você quiser que receba o resumo.</li>
+        <li>Importante: cada pessoa da lista precisa mandar uma mensagem qualquer pro seu bot novo primeiro (procura ele pelo usuário que você escolheu) — sem isso, o Telegram não deixa ele mandar mensagem pra ela ainda</li>
       </ol>
     </details>
-    <div class="frow2" style="max-width:600px;">
-      <div class="ffield"><label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">Token do Bot</label>
-        <input id="tgToken" placeholder="123456789:ABCdef..." style="width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px;"></div>
-      <div class="ffield"><label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">Chat ID</label>
-        <input id="tgChatId" placeholder="987654321" style="width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px;"></div>
+    <div class="ffield" style="max-width:600px;"><label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">Token do Bot</label>
+      <input id="tgToken" placeholder="123456789:ABCdef..." style="width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px;"></div>
+    <div class="ffield" style="max-width:600px;">
+      <label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">Chat IDs — quem vai receber o resumo</label>
+      <div style="display:flex; gap:8px;">
+        <input id="tgChatIdInput" placeholder="Ex.: 987654321" style="flex:1; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px;">
+        <button type="button" class="btn" id="btnAdicionarChatId" style="flex-shrink:0;">+ Adicionar</button>
+      </div>
+      <div id="listaChatIds" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;"></div>
     </div>
     <div style="display:flex; gap:10px; margin-top:16px;">
       <button class="btn btn-primary" id="btnSalvarTelegram">Salvar</button>
@@ -223,17 +229,43 @@
   carregarFidelidade();
 
   // ---------- Telegram (Resumo de Caixa) ----------
+  let chatIdsAtuais = [];
+
+  function renderListaChatIds(){
+    setHTML('listaChatIds', chatIdsAtuais.length ? chatIdsAtuais.map((id,i) => `
+      <span class="chip-chatid">${id}<button type="button" onclick="window.__removerChatId(${i})">✕</button></span>
+    `).join('') : '<span style="color:var(--text-tertiary); font-size:11.5px;">Nenhum Chat ID adicionado ainda.</span>');
+  }
+  window.__removerChatId = (i) => { chatIdsAtuais.splice(i,1); renderListaChatIds(); };
+
+  function adicionarChatId(){
+    const valor = document.getElementById('tgChatIdInput').value.trim();
+    if (!valor) return;
+    if (chatIdsAtuais.includes(valor)){ mostrarToast('Esse Chat ID já está na lista.', 'erro'); return; }
+    chatIdsAtuais.push(valor);
+    document.getElementById('tgChatIdInput').value = '';
+    renderListaChatIds();
+    document.getElementById('tgChatIdInput').focus();
+  }
+  document.getElementById('btnAdicionarChatId').addEventListener('click', adicionarChatId);
+  document.getElementById('tgChatIdInput').addEventListener('keydown', (e) => { if (e.key === 'Enter'){ e.preventDefault(); adicionarChatId(); } });
+
   async function carregarTelegram(){
     let cfg;
     try { cfg = await dbGetById('CONFIG', 'telegram_resumo_caixa'); } catch (e) { cfg = null; }
     document.getElementById('tgToken').value = cfg ? cfg.BOT_TOKEN||'' : '';
-    document.getElementById('tgChatId').value = cfg ? cfg.CHAT_ID||'' : '';
+    // Migração automática: quem já tinha um único CHAT_ID salvo (formato antigo) continua
+    // funcionando — ele só vira o primeiro item da lista nova, sem precisar recadastrar.
+    if (cfg && Array.isArray(cfg.CHAT_IDS)) chatIdsAtuais = [...cfg.CHAT_IDS];
+    else if (cfg && cfg.CHAT_ID) chatIdsAtuais = [cfg.CHAT_ID];
+    else chatIdsAtuais = [];
+    renderListaChatIds();
   }
 
   document.getElementById('btnSalvarTelegram').addEventListener('click', async () => {
     try {
       if (!(await checarPermissao('CONFIGURACOES','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
-      const dados = { ID:'telegram_resumo_caixa', BOT_TOKEN: document.getElementById('tgToken').value.trim(), CHAT_ID: document.getElementById('tgChatId').value.trim() };
+      const dados = { ID:'telegram_resumo_caixa', BOT_TOKEN: document.getElementById('tgToken').value.trim(), CHAT_IDS: chatIdsAtuais };
       const existente = await dbGetById('CONFIG', 'telegram_resumo_caixa');
       if (existente) await dbUpdate('CONFIG', 'telegram_resumo_caixa', dados);
       else await dbInsert('CONFIG', dados);
@@ -243,14 +275,14 @@
 
   document.getElementById('btnTestarTelegram').addEventListener('click', async () => {
     const token = document.getElementById('tgToken').value.trim();
-    const chatId = document.getElementById('tgChatId').value.trim();
     const statusEl = document.getElementById('statusTelegram');
-    if (!token || !chatId){ statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Preenche o Token e o Chat ID antes de testar.'; return; }
-    statusEl.style.color = 'var(--text-tertiary)'; statusEl.textContent = 'Enviando...';
+    if (!token || !chatIdsAtuais.length){ statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Preenche o Token e adiciona pelo menos um Chat ID antes de testar.'; return; }
+    statusEl.style.color = 'var(--text-tertiary)'; statusEl.textContent = 'Enviando pra ' + chatIdsAtuais.length + ' pessoa(s)...';
     try {
-      const resultado = await window.enviarMensagemTelegram(token, chatId, '✅ Teste do Mano Papa — se você recebeu essa mensagem, o resumo de caixa vai funcionar certinho!');
-      if (resultado.ok) { statusEl.style.color = 'var(--mint)'; statusEl.textContent = '✓ Mensagem de teste enviada — confere no seu Telegram.'; }
-      else { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Erro do Telegram: ' + (resultado.description || 'não foi possível enviar. Confere o Token e o Chat ID.'); }
+      const resultados = await Promise.all(chatIdsAtuais.map(id => window.enviarMensagemTelegram(token, id, '✅ Teste do Mano Papa — se você recebeu essa mensagem, o resumo de caixa vai funcionar certinho!')));
+      const falhas = resultados.filter(r => !r.ok);
+      if (!falhas.length) { statusEl.style.color = 'var(--mint)'; statusEl.textContent = '✓ Mensagem de teste enviada pra todo mundo da lista.'; }
+      else { statusEl.style.color = 'var(--red)'; statusEl.textContent = falhas.length + ' de ' + chatIdsAtuais.length + ' falharam — confere se esses Chat IDs já mandaram mensagem pro bot antes.'; }
     } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Erro: ' + e.message; }
   });
 
