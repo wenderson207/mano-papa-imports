@@ -1022,7 +1022,7 @@
       <style>
         @page { size: 58mm auto; margin: 0; }
         * { box-sizing:border-box; }
-        body { width:54mm; margin:0 auto; padding:2mm 2mm 6mm; font-family:'Courier New',monospace; font-size:9.5px; line-height:1.45; color:#000; }
+        body { width:58mm; margin:0; padding:2mm 2mm 6mm; font-family:'Courier New',monospace; font-size:9.5px; line-height:1.45; color:#000; }
         .centro { text-align:center; }
         .logo { max-width:34mm; max-height:16mm; display:block; margin:0 auto 2mm; }
         .nome-loja { font-size:12px; font-weight:700; }
@@ -1090,12 +1090,16 @@
             // Força o navegador a recalcular o tamanho da página AGORA, com o QR Code já
             // inserido — sem isso, ele podia calcular o tamanho do papel antes do QR entrar
             // na tela, e cortar o final do comprovante na hora de imprimir de verdade
-            // (mesmo aparecendo certinho na tela normal).
-            document.body.offsetHeight; // força o navegador a "olhar" o tamanho de novo
-            setTimeout(function(){
-              document.body.offsetHeight;
-              window.print();
-            }, 400);
+            // (mesmo aparecendo certinho na tela normal). O duplo requestAnimationFrame
+            // espera o navegador de verdade DESENHAR o QR na tela (não só inserir no
+            // HTML) antes de mandar imprimir — mais confiável que só esperar um tempo fixo.
+            document.body.offsetHeight;
+            requestAnimationFrame(function(){
+              requestAnimationFrame(function(){
+                document.body.offsetHeight;
+                setTimeout(function(){ window.print(); }, 350);
+              });
+            });
           }
           function usarLinkComoTexto(motivo){
             console.error('QR Code do Instagram não gerou — usando o link em texto. Motivo:', motivo);
