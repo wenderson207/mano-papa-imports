@@ -496,8 +496,20 @@
   // ---------- Finalizar venda ----------
   document.getElementById('btnFinalizar').addEventListener('click', async () => {
     if (!carrinho.length){ mostrarToast('Adicione ao menos um item.', 'erro'); return; }
-    if (!document.getElementById('fEmpresaVenda').value){ mostrarToast('Selecione para qual loja é esta venda.', 'erro'); return; }
+    const lojaDaVenda = document.getElementById('fEmpresaVenda').value;
+    if (!lojaDaVenda){ mostrarToast('Selecione para qual loja é esta venda.', 'erro'); return; }
     if (!(await checarPermissao('VENDAS','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+
+    // Não deixa vender sem o caixa do dia estar aberto — é o jeito de garantir que
+    // ninguém esquece de abrir o caixa antes de começar a trabalhar.
+    try {
+      const idDiaCaixa = lojaDaVenda + '_' + new Date().toISOString().substring(0,10);
+      const caixaDeHoje = await dbGetById('CAIXA', idDiaCaixa);
+      if (!caixaDeHoje || caixaDeHoje.STATUS !== 'Aberto') {
+        mostrarToast('O caixa de hoje ainda não foi aberto — vai na aba "Caixa Diário" e abre antes de vender.', 'erro');
+        return;
+      }
+    } catch (e) { mostrarToast('Não consegui confirmar se o caixa está aberto: ' + e.message, 'erro'); return; }
 
     const combinando = document.getElementById('chkCombinarPagamento').checked;
     let formaPagamento = document.getElementById('formaPagamento').value;
@@ -1021,8 +1033,8 @@
     return `<!DOCTYPE html><html><head><meta charset="utf-8">
       <style>
         @page { size: 58mm auto; margin: 0; }
-        * { box-sizing:border-box; }
-        body { width:58mm; margin:0; padding:2mm 2mm 6mm; font-family:'Courier New',monospace; font-size:9.5px; line-height:1.45; color:#000; }
+        * { box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+        body { width:58mm; margin:0; padding:2mm 9mm 22mm 1mm; font-family:'Courier New',monospace; font-size:9.5px; line-height:1.45; color:#000; }
         .centro { text-align:center; }
         .logo { max-width:34mm; max-height:16mm; display:block; margin:0 auto 2mm; }
         .nome-loja { font-size:12px; font-weight:700; }
@@ -1097,7 +1109,7 @@
             requestAnimationFrame(function(){
               requestAnimationFrame(function(){
                 document.body.offsetHeight;
-                setTimeout(function(){ window.print(); }, 350);
+                setTimeout(function(){ window.print(); }, 900);
               });
             });
           }
