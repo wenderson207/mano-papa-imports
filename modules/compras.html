@@ -1,7 +1,7 @@
 <style>
   .modal-overlay{ position:fixed; inset:0; background:rgba(3,5,8,0.6); display:none; align-items:center; justify-content:center; z-index:100; padding:24px; }
   .modal-overlay.open{ display:flex; }
-  .modal-box{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:14px; width:100%; max-width:520px; max-height:88vh; overflow-y:auto; }
+  .modal-box{ background:var(--bg-surface); border:1px solid var(--hairline); border-radius:14px; width:100%; max-width:480px; max-height:88vh; overflow-y:auto; }
   .modal-head{ display:flex; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--hairline); }
   .modal-body{ padding:20px 22px; }
   .modal-foot{ display:flex; justify-content:flex-end; gap:10px; padding:16px 22px; border-top:1px solid var(--hairline); }
@@ -9,117 +9,205 @@
   .ffield label{ display:block; font-size:12px; color:var(--text-secondary); margin-bottom:6px; }
   .ffield input, .ffield select{ width:100%; background:var(--bg-elevated); border:1px solid var(--hairline); color:var(--text-primary); padding:10px 12px; border-radius:8px; font-size:13px; }
   .modal-close{ background:none; border:none; color:var(--text-tertiary); font-size:18px; cursor:pointer; }
-  .item-linha{ display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; margin-bottom:8px; align-items:center; }
+  .frow2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .toggle-caixa{ display:flex; align-items:center; gap:10px; background:var(--bg-elevated); border:1px solid var(--hairline); border-radius:10px; padding:12px 14px; cursor:pointer; }
+  .toggle-caixa input{ width:auto; accent-color:var(--mint); }
+  .badge{ display:inline-flex; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600; font-family:var(--font-mono); }
+  .badge.ok{ background:rgba(47,225,168,0.12); color:var(--mint); }
+  .badge.warn{ background:rgba(245,166,35,0.12); color:var(--amber); }
 </style>
 
 <div class="toolbar">
-  <div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Compras</h1></div>
-  <button class="btn btn-primary" id="btnNovo">+ Nova compra</button>
+  <div><h1 style="font-family:var(--font-display); font-size:22px; margin:0 0 4px;">Compras e Gastos</h1>
+  <p style="color:var(--text-secondary); font-size:13px; margin:0;">Registra qualquer gasto da loja — comprou algo, pagou uma conta, tirou dinheiro do caixa pra alguma coisa.</p></div>
+  <button class="btn btn-primary" id="btnNovo">+ Novo gasto</button>
 </div>
 
-<table class="dt"><thead><tr><th>Data</th><th>Loja</th><th>Fornecedor</th><th>Valor total</th><th>Status</th></tr></thead>
-  <tbody id="linhas"><tr class="empty-row"><td colspan="5">Carregando…</td></tr></tbody>
+<div style="margin-bottom:14px; display:flex; gap:10px; flex-wrap:wrap;">
+  <select id="filtroLojaCompras" style="background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;"><option value="">Todas as lojas</option></select>
+  <input type="date" id="filtroDeCompras" style="background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;">
+  <input type="date" id="filtroAteCompras" style="background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;">
+  <select id="filtroCaixaCompras" style="background:var(--bg-surface); border:1px solid var(--hairline); color:var(--text-primary); padding:9px 12px; border-radius:8px; font-size:12.5px;">
+    <option value="">Caixa ou não, tanto faz</option>
+    <option value="sim">Só o que saiu do caixa</option>
+    <option value="nao">Só o que NÃO saiu do caixa</option>
+  </select>
+  <button class="btn" id="btnLimparFiltroCompras" style="padding:8px 12px;">Limpar</button>
+</div>
+
+<div class="kpi-grid" style="margin-bottom:20px;">
+  <div class="kpi"><div class="lbl">Total gasto (no filtro)</div><div class="val" id="kpiTotalCompras">—</div></div>
+  <div class="kpi"><div class="lbl">Saiu do caixa</div><div class="val" id="kpiCaixaCompras">—</div></div>
+</div>
+
+<table class="dt"><thead><tr><th>Data</th><th>Loja</th><th>O que</th><th>Onde</th><th>Pagamento</th><th>Valor</th><th>Caixa?</th><th></th></tr></thead>
+  <tbody id="linhas"><tr class="empty-row"><td colspan="8">Carregando…</td></tr></tbody>
 </table>
 
 <div class="modal-overlay" id="modal">
   <div class="modal-box">
-    <div class="modal-head"><h3 style="font-family:var(--font-display); margin:0;">Nova compra</h3><button class="modal-close" id="fecharModal">✕</button></div>
+    <div class="modal-head"><h3 style="font-family:var(--font-display); margin:0;">Novo gasto</h3><button class="modal-close" id="fecharModal">✕</button></div>
     <div class="modal-body">
+      <input type="hidden" id="fId">
       <div class="ffield"><label>Loja *</label><select id="fLojaCompra"><option value="">Selecione…</option></select></div>
-      <div class="ffield"><label>Fornecedor</label><select id="fFornecedor"><option value="">Selecione…</option></select></div>
-      <div id="itensCompra"></div>
-      <button class="btn" id="btnAddItem" style="margin-top:6px;">+ item</button>
+      <div class="ffield"><label>O que foi (descrição) *</label><input id="fDescricao" placeholder="Ex.: Compra de tela pro estoque, conta de luz, material de limpeza…"></div>
+      <div class="ffield"><label>Onde (local/fornecedor)</label><input id="fLocal" placeholder="Ex.: Fornecedor X, posto de gasolina, papelaria…"></div>
+      <div class="frow2">
+        <div class="ffield"><label>Forma de pagamento *</label>
+          <select id="fFormaPagamento">
+            <option value="Dinheiro">Dinheiro</option><option value="PIX">PIX</option>
+            <option value="Cartão de Débito">Cartão de Débito</option><option value="Cartão de Crédito">Cartão de Crédito</option>
+          </select>
+        </div>
+        <div class="ffield"><label>Valor (R$) *</label><input id="fValor" type="number" step="0.01"></div>
+      </div>
+      <div class="ffield"><label>Data</label><input id="fData" type="date"></div>
+      <label class="toggle-caixa">
+        <input type="checkbox" id="fSaiuDoCaixa">
+        <span>Esse dinheiro saiu do caixa físico da loja (afeta o fechamento do dia)</span>
+      </label>
     </div>
-    <div class="modal-foot"><button class="btn" id="btnCancelar">Cancelar</button><button class="btn btn-primary" id="btnSalvar">Registrar compra</button></div>
+    <div class="modal-foot"><button class="btn" id="btnCancelar">Cancelar</button><button class="btn btn-primary" id="btnSalvar">Salvar</button></div>
   </div>
 </div>
 
 <script>
 (async function(){
-  let compras = [], fornecedores = [], produtos = [], empresas = [], produtosDaLojaCompra = [];
+  let comprasCompleto = [], empresas = [];
 
   function moeda(v){ return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
   function dataBR(v){ return v ? parseDataLocal(v).toLocaleDateString('pt-BR') : '—'; }
-  function nomeFornecedor(id){ const f = fornecedores.find(x=>x.ID===id); return f?f.NOME:'—'; }
   function nomeLoja(id){ if (!id) return '—'; const e = empresas.find(x=>x.ID===id); return e?e.NOME:'—'; }
 
   async function carregar(){
     try {
-      if (!(await checarPermissao('COMPRAS','VISUALIZAR'))){ setHTML('linhas', '<tr class="empty-row"><td colspan="5">Sem permissão.</td></tr>'); return; }
+      if (!(await checarPermissao('COMPRAS','VISUALIZAR'))){ setHTML('linhas', '<tr class="empty-row"><td colspan="8">Sem permissão.</td></tr>'); return; }
       empresas = await dbGetAll('EMPRESAS');
-      fornecedores = await dbGetAll('FORNECEDORES');
-      produtos = await dbGetAll('PRODUTOS');
-      let todasCompras = await dbGetAll('COMPRAS');
-      compras = window.lojaAtivaId ? todasCompras.filter(c => c.EMPRESA_ID === window.lojaAtivaId) : todasCompras;
-      setHTML('linhas', compras.length
-        ? compras.map(c => `<tr><td>${dataBR(c.DATA)}</td><td>${nomeLoja(c.EMPRESA_ID)}</td><td>${nomeFornecedor(c.FORNECEDOR_ID)}</td><td>${moeda(c.VALOR_TOTAL)}</td><td><span class="badge ok">${c.STATUS}</span></td></tr>`).join('')
-        : '<tr class="empty-row"><td colspan="5">Nenhuma compra registrada.</td></tr>');
-      setHTML('fFornecedor', '<option value="">Selecione…</option>' + fornecedores.map(f => `<option value="${f.ID}">${f.NOME}</option>`).join(''));
+      comprasCompleto = (await dbGetAll('COMPRAS')).sort((a,b) => new Date(b.DATA) - new Date(a.DATA));
+
+      const opcoesLoja = empresas.map(e => `<option value="${e.ID}">${e.NOME}</option>`).join('');
+      setHTML('filtroLojaCompras', '<option value="">Todas as lojas</option>' + opcoesLoja);
 
       const selLoja = document.getElementById('fLojaCompra');
-      if (window.lojaAtivaId) {
-        setHTML('fLojaCompra', empresas.map(e => `<option value="${e.ID}" ${e.ID===window.lojaAtivaId?'selected':''}>${e.NOME}</option>`).join(''));
-        selLoja.disabled = true;
-      } else {
-        setHTML('fLojaCompra', '<option value="">Selecione…</option>' + empresas.map(e => `<option value="${e.ID}">${e.NOME}</option>`).join(''));
-        selLoja.disabled = false;
-      }
+      if (window.lojaAtivaId) { setHTML('fLojaCompra', opcoesLoja); selLoja.value = window.lojaAtivaId; selLoja.disabled = true; }
+      else { setHTML('fLojaCompra', '<option value="">Selecione…</option>' + opcoesLoja); selLoja.disabled = false; }
+
+      renderTabela();
     } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
   }
 
-  function atualizarProdutosDaLojaCompra(){
-    const lojaId = document.getElementById('fLojaCompra').value;
-    produtosDaLojaCompra = lojaId ? produtos.filter(p => p.EMPRESA_ID === lojaId) : [];
+  function comprasFiltradas(){
+    const loja = document.getElementById('filtroLojaCompras').value;
+    const de = document.getElementById('filtroDeCompras').value;
+    const ate = document.getElementById('filtroAteCompras').value;
+    const caixa = document.getElementById('filtroCaixaCompras').value;
+    return comprasCompleto.filter(c => {
+      if (loja && c.EMPRESA_ID !== loja) return false;
+      if (de && new Date(c.DATA) < new Date(de+'T00:00:00')) return false;
+      if (ate && new Date(c.DATA) > new Date(ate+'T23:59:59')) return false;
+      if (caixa === 'sim' && !c.SAIU_DO_CAIXA) return false;
+      if (caixa === 'nao' && c.SAIU_DO_CAIXA) return false;
+      return true;
+    });
   }
 
-  const modal = document.getElementById('modal');
-  function linhaItemHtml(){
-    const opcoes = produtosDaLojaCompra.map(p => `<option value="${p.ID}">${p.NOME}</option>`).join('') || '<option value="">Selecione a loja primeiro</option>';
-    return `<div class="item-linha"><select class="item-produto">${opcoes}</select><input class="item-qtd" type="number" placeholder="Qtd" value="1"><input class="item-preco" type="number" step="0.01" placeholder="Preço unit."><button class="btn" onclick="this.parentElement.remove()">✕</button></div>`;
+  function renderTabela(){
+    const lista = comprasFiltradas();
+    document.getElementById('kpiTotalCompras').textContent = moeda(lista.reduce((s,c)=>s+Number(c.VALOR||0),0));
+    document.getElementById('kpiCaixaCompras').textContent = moeda(lista.filter(c=>c.SAIU_DO_CAIXA).reduce((s,c)=>s+Number(c.VALOR||0),0));
+
+    setHTML('linhas', lista.length ? lista.map(c => `<tr>
+      <td>${dataBR(c.DATA)}</td><td>${nomeLoja(c.EMPRESA_ID)}</td>
+      <td><b>${c.DESCRICAO}</b></td><td>${c.LOCAL||'—'}</td><td>${c.FORMA_PAGAMENTO}</td>
+      <td>${moeda(c.VALOR)}</td>
+      <td>${c.SAIU_DO_CAIXA ? '<span class="badge warn">Sim</span>' : '<span class="badge ok">Não</span>'}</td>
+      <td style="display:flex; gap:6px;">
+        <button class="btn" style="padding:6px 10px; font-size:11.5px;" onclick="window.__editarGasto('${c.ID}')">Editar</button>
+        <button class="btn" style="padding:6px 10px; font-size:11.5px; color:var(--red);" onclick="window.__excluirGasto('${c.ID}')">Excluir</button>
+      </td>
+      </tr>`).join('') : '<tr class="empty-row"><td colspan="8">Nenhum gasto registrado com esse filtro.</td></tr>');
   }
-  document.getElementById('btnNovo').addEventListener('click', () => {
-    atualizarProdutosDaLojaCompra();
-    setHTML('itensCompra', linhaItemHtml());
-    modal.classList.add('open');
+
+  ['filtroLojaCompras','filtroDeCompras','filtroAteCompras','filtroCaixaCompras'].forEach(id => document.getElementById(id).addEventListener('change', renderTabela));
+  document.getElementById('btnLimparFiltroCompras').addEventListener('click', () => {
+    document.getElementById('filtroLojaCompras').value=''; document.getElementById('filtroDeCompras').value=''; document.getElementById('filtroAteCompras').value=''; document.getElementById('filtroCaixaCompras').value='';
+    renderTabela();
   });
-  document.getElementById('fLojaCompra').addEventListener('change', () => {
-    atualizarProdutosDaLojaCompra();
-    setHTML('itensCompra', linhaItemHtml());
-  });
-  document.getElementById('btnAddItem').addEventListener('click', () => {
-    document.getElementById('itensCompra').insertAdjacentHTML('beforeend', linhaItemHtml());
-  });
+
+  const modal = document.getElementById('modal');
+  let gastoEmEdicao = null;
+
+  function resetarFormulario(){
+    gastoEmEdicao = null;
+    document.getElementById('fId').value = '';
+    document.getElementById('fDescricao').value = ''; document.getElementById('fLocal').value = '';
+    document.getElementById('fFormaPagamento').value = 'Dinheiro'; document.getElementById('fValor').value = '';
+    document.getElementById('fData').value = new Date().toISOString().substring(0,10);
+    document.getElementById('fSaiuDoCaixa').checked = false;
+    if (!window.lojaAtivaId) document.getElementById('fLojaCompra').value = '';
+  }
+
+  document.getElementById('btnNovo').addEventListener('click', () => { resetarFormulario(); modal.classList.add('open'); });
   document.getElementById('fecharModal').addEventListener('click', () => modal.classList.remove('open'));
   document.getElementById('btnCancelar').addEventListener('click', () => modal.classList.remove('open'));
 
+  window.__editarGasto = (id) => {
+    gastoEmEdicao = comprasCompleto.find(c => c.ID === id);
+    if (!gastoEmEdicao) return;
+    document.getElementById('fId').value = gastoEmEdicao.ID;
+    document.getElementById('fLojaCompra').value = gastoEmEdicao.EMPRESA_ID || '';
+    document.getElementById('fDescricao').value = gastoEmEdicao.DESCRICAO || '';
+    document.getElementById('fLocal').value = gastoEmEdicao.LOCAL || '';
+    document.getElementById('fFormaPagamento').value = gastoEmEdicao.FORMA_PAGAMENTO || 'Dinheiro';
+    document.getElementById('fValor').value = gastoEmEdicao.VALOR || '';
+    document.getElementById('fData').value = (gastoEmEdicao.DATA||'').substring(0,10);
+    document.getElementById('fSaiuDoCaixa').checked = !!gastoEmEdicao.SAIU_DO_CAIXA;
+    modal.classList.add('open');
+  };
+
+  window.__excluirGasto = async (id) => {
+    if (!confirm('Excluir esse gasto? Isso não desfaz o lançamento já feito no Financeiro — se precisar, ajusta lá também.')) return;
+    try {
+      if (!(await checarPermissao('COMPRAS','EXCLUIR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+      await dbDelete('COMPRAS', id);
+      mostrarToast('Gasto excluído.');
+      carregar();
+    } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  };
+
   document.getElementById('btnSalvar').addEventListener('click', async () => {
     const lojaId = document.getElementById('fLojaCompra').value;
-    if (!lojaId){ mostrarToast('Selecione a loja desta compra.', 'erro'); return; }
+    const descricao = document.getElementById('fDescricao').value.trim();
+    const valor = Number(document.getElementById('fValor').value) || 0;
+    const dataEscolhida = document.getElementById('fData').value;
+    if (!lojaId){ mostrarToast('Escolhe a loja.', 'erro'); return; }
+    if (!descricao){ mostrarToast('Descreve o que foi esse gasto.', 'erro'); return; }
+    if (!valor){ mostrarToast('Informa o valor.', 'erro'); return; }
 
-    const linhas = [...document.querySelectorAll('#itensCompra .item-linha')].map(l => ({
-      PRODUTO_ID: l.querySelector('.item-produto').value,
-      QUANTIDADE: Number(l.querySelector('.item-qtd').value)||0,
-      PRECO_UNITARIO: Number(l.querySelector('.item-preco').value)||0
-    })).filter(i => i.PRODUTO_ID && i.QUANTIDADE > 0);
-
-    if (!linhas.length){ mostrarToast('Adicione ao menos um item válido.', 'erro'); return; }
+    const dados = {
+      EMPRESA_ID: lojaId, DESCRICAO: descricao, LOCAL: document.getElementById('fLocal').value.trim(),
+      FORMA_PAGAMENTO: document.getElementById('fFormaPagamento').value, VALOR: valor,
+      DATA: dataEscolhida ? new Date(dataEscolhida + 'T12:00:00').toISOString() : new Date().toISOString(),
+      SAIU_DO_CAIXA: document.getElementById('fSaiuDoCaixa').checked, STATUS: 'Concluída'
+    };
 
     try {
-      if (!(await checarPermissao('COMPRAS','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
-      const valorTotal = linhas.reduce((s,i) => s + i.QUANTIDADE*i.PRECO_UNITARIO, 0);
-      const compra = await dbInsert('COMPRAS', { EMPRESA_ID: lojaId, FORNECEDOR_ID: document.getElementById('fFornecedor').value, DATA: new Date().toISOString(), VALOR_TOTAL: valorTotal, STATUS: 'Concluída' });
-
-      for (const item of linhas) {
-        await dbInsert('ITENS_COMPRA', Object.assign({ COMPRA_ID: compra.ID }, item));
-        const produto = produtos.find(p => p.ID === item.PRODUTO_ID);
-        const novoEstoque = (Number(produto.ESTOQUE_ATUAL)||0) + item.QUANTIDADE;
-        await dbUpdate('PRODUTOS', produto.ID, { ESTOQUE_ATUAL: novoEstoque });
-        await dbInsert('MOVIMENTOS_ESTOQUE', { EMPRESA_ID: lojaId, PRODUTO_ID: produto.ID, TIPO:'ENTRADA_COMPRA', QUANTIDADE: item.QUANTIDADE, MOTIVO:'Compra '+compra.ID, USUARIO_ID: usuarioAtual.ID, DATA: new Date().toISOString() });
+      if (gastoEmEdicao) {
+        if (!(await checarPermissao('COMPRAS','EDITAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+        await dbUpdate('COMPRAS', gastoEmEdicao.ID, dados);
+        mostrarToast('Gasto atualizado.');
+      } else {
+        if (!(await checarPermissao('COMPRAS','CADASTRAR'))){ mostrarToast('Sem permissão.', 'erro'); return; }
+        await dbInsert('COMPRAS', Object.assign({ USUARIO_ID: usuarioAtual.ID }, dados));
+        // Também lança como despesa no Financeiro, pra aparecer nos relatórios financeiros normalmente.
+        await dbInsert('FINANCEIRO', {
+          EMPRESA_ID: lojaId, TIPO:'Despesa', CATEGORIA: descricao, DESCRICAO: descricao + (dados.LOCAL ? ' — ' + dados.LOCAL : ''),
+          VALOR: valor, DATA_VENCIMENTO: dados.DATA, DATA_PAGAMENTO: dados.DATA, STATUS:'Pago'
+        });
+        mostrarToast('Gasto registrado.');
       }
-      await dbInsert('FINANCEIRO', { EMPRESA_ID: lojaId, TIPO:'Despesa', CATEGORIA:'Compra de mercadoria', DESCRICAO:'Compra '+compra.ID, VALOR: valorTotal, DATA_VENCIMENTO: new Date().toISOString(), DATA_PAGAMENTO: new Date().toISOString(), STATUS:'Pago' });
-
-      mostrarToast('Compra registrada e estoque atualizado.');
-      modal.classList.remove('open'); carregar();
+      modal.classList.remove('open');
+      carregar();
     } catch (e) { mostrarToast('Erro: ' + e.message, 'erro'); }
   });
 
