@@ -20,6 +20,8 @@
   <p style="color:var(--text-secondary); font-size:13px; margin:0;">Visão geral da loja.</p></div>
 </div>
 
+<div id="avisoCaixaDashboard"></div>
+
 <div class="resumo-dia">
   <h3>📅 Resumo de hoje — <span id="dataHoje"></span></h3>
   <div class="resumo-grid">
@@ -85,14 +87,50 @@
   document.getElementById('dataHoje').textContent = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long' });
 
   try {
-    const [vendas, itensVenda, clientes, produtos, financeiro, assistencias] = await Promise.all([
+    const [vendasBrutas, itensVendaBrutos, clientes, produtosBrutos, financeiroBruto, assistencias, empresas] = await Promise.all([
       dbQuery('VENDAS', { STATUS: 'Concluída' }),
       dbGetAll('ITENS_VENDA'),
       dbGetAll('CLIENTES'),
       dbGetAll('PRODUTOS'),
       dbGetAll('FINANCEIRO'),
-      dbGetAll('ASSISTENCIAS')
+      dbGetAll('ASSISTENCIAS'),
+      dbGetAll('EMPRESAS')
     ]);
+
+    // Aplica o filtro de loja (o seletor lá no topo do sistema) em tudo que os
+    // cards e gráficos daqui em cima usam — antes disso, "Vendido hoje" e o
+    // resto somavam as duas lojas juntas, sem respeitar o filtro.
+    const vendas = window.lojaAtivaId ? vendasBrutas.filter(v => v.EMPRESA_ID === window.lojaAtivaId) : vendasBrutas;
+    const produtos = window.lojaAtivaId ? produtosBrutos.filter(p => p.EMPRESA_ID === window.lojaAtivaId) : produtosBrutos;
+    const financeiro = window.lojaAtivaId ? financeiroBruto.filter(f => f.EMPRESA_ID === window.lojaAtivaId) : financeiroBruto;
+    const idsVendasFiltradas = new Set(vendas.map(v => v.ID));
+    const itensVenda = window.lojaAtivaId ? itensVendaBrutos.filter(i => idsVendasFiltradas.has(i.VENDA_ID)) : itensVendaBrutos;
+    // Assistência técnica ainda não guarda de qual loja é cada OS, então "OS entregues
+    // hoje" continua mostrando de todas as lojas juntas mesmo com o filtro ativo.
+
+    const lojaAtivaNome = window.lojaAtivaId ? (empresas.find(e => e.ID === window.lojaAtivaId)||{}).NOME : null;
+    document.querySelector('.toolbar p').textContent = lojaAtivaNome ? 'Visão geral de ' + lojaAtivaNome + '.' : 'Visão geral de todas as lojas.';
+
+    // Avisa se o caixa de hoje ainda não foi aberto (a qualquer hora), ou se já
+    // passou das 19h e ele ainda não foi fechado — reforça o hábito diário sem
+    // travar o Dashboard (quem realmente fica bloqueado é a tela de Vendas).
+    try {
+      const lojasParaChecar = window.lojaAtivaId ? [window.lojaAtivaId] : empresas.map(e => e.ID);
+      const hojeISO = new Date().toISOString().substring(0,10);
+      const caixasDeHoje = await Promise.all(lojasParaChecar.map(id => dbGetById('CAIXA', id + '_' + hojeISO)));
+      const lojasSemAbrir = lojasParaChecar.filter((id,i) => !caixasDeHoje[i]);
+      const lojasParaFechar = lojasParaChecar.filter((id,i) => caixasDeHoje[i] && caixasDeHoje[i].STATUS === 'Aberto');
+      const horaAtual = new Date().getHours();
+
+      let avisoHtml = '';
+      if (lojasSemAbrir.length) {
+        const nomes = lojasSemAbrir.map(id => (empresas.find(e=>e.ID===id)||{}).NOME).filter(Boolean).join(', ');
+        avisoHtml = `<div style="background:rgba(255,92,92,0.1); border:1px solid var(--red); color:var(--red); border-radius:10px; padding:12px 16px; margin-bottom:20px; font-size:13px;">⚠️ Caixa de hoje ainda não foi aberto${lojasSemAbrir.length>1?' ('+nomes+')':''} — abre na aba <b>Caixa Diário</b> antes de vender.</div>`;
+      } else if (horaAtual >= 19 && lojasParaFechar.length) {
+        avisoHtml = `<div style="background:rgba(245,166,35,0.1); border:1px solid var(--amber); color:var(--amber); border-radius:10px; padding:12px 16px; margin-bottom:20px; font-size:13px;">🕖 Já são mais de 19h e o caixa de hoje ainda está aberto — não esquece de fechar na aba <b>Caixa Diário</b>.</div>`;
+      }
+      setHTML('avisoCaixaDashboard', avisoHtml);
+    } catch (e) { /* se falhar, só não mostra o aviso — não trava o resto do Dashboard */ }
 
     const hojeStr = new Date().toDateString();
     const vendasHoje = vendas.filter(v => new Date(v.DATA).toDateString() === hojeStr);
